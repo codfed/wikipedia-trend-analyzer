@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Deaths article",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "program": "${workspaceFolder}/main.py",
+      "env": {
+        "TARGET_DATE": "2026-04-15",
+        "TARGET_TITLE": "Deaths_in_2026",
+        "WIKIPEDIA_EMAIL": "cjfeda@gmail.com"
+      }
+    }
+  ]
+}

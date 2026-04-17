@@ -45,3 +45,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# IDE / editor config (may contain local paths or credentials)
+.vscode/
+.idea/

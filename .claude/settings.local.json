@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -E \"^d|\\\\.py$\")"
+      "Bash(grep -E \"^d|\\\\.py$\")",
+      "Bash(grep -r \"^\\\\s*#\\\\s*[a-zA-Z]\" /Users/codyfeda/devel/wikipedia-trend-analyzer --include=\"*.py\" ! -path \"*/.venv/*\" ! -path \"*/__pycache__/*\")",
+      "Bash(grep -v \"^[^:]*:\\\\s*#\\\\s*-\\\\{5,\\\\}\\\\|^[^:]*:\\\\s*#\\\\s*[A-Z][A-Za-z\\\\s]*$\")"
     ]
   }
 }

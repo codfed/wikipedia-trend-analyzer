@@ -10,7 +10,7 @@ from llm.generator import ExplanationGenerator
 from llm.client import LLMClient
 from llm.prompts import PROMPT_VERSION
 
-_DEATHS_ARTICLE_RE = re.compile(r"^Deaths_in_(\d{4})$", re.IGNORECASE)
+_DEATHS_ARTICLE_RE = re.compile(r"^Deaths[_ ]in[_ ](\d{4})$", re.IGNORECASE)
 
 
 class ArticleEnricher:

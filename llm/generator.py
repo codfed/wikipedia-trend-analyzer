@@ -49,6 +49,7 @@ class ExplanationGenerator:
 
         short_prompt = SHORT_PROMPT.format(
             title=article.normalized_title,
+            summary=article.summary or article.extract[:200],
             trending_reason=trending_reason,
         )
         trending_reason_short = self.llm_client.generate(

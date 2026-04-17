@@ -2,7 +2,7 @@
 
 # Increment this whenever a prompt changes.  Saved articles and eval results
 # include this version so quality changes can be tracked over time.
-PROMPT_VERSION = "v2.2"
+PROMPT_VERSION = "v2.3"
 
 # ---------------------------------------------------------------------------
 # Summary (always runs, Haiku)
@@ -78,13 +78,18 @@ Explanation:"""
 SHORT_MODEL = "claude-haiku-4-5-20251001"
 SHORT_TEMPERATURE = 0.2
 SHORT_MAX_TOKENS = 128
-SHORT_PROMPT = """Compress the trending reason below into a single concise summary.
+SHORT_PROMPT = """Write a single concise sentence that identifies what "{title}" is and why it is trending.
+
+Structure: lead with the title and a brief descriptor drawn from the summary (e.g. "AEW Dynasty, a professional wrestling event, ..." or "Dhurandhar: The Revenge, an Indian film, ..."), then state the trending reason.
 
 Rules:
-- Ensure {title} is clearly stated and established.
+- Use the article summary below to form the descriptor — keep it short (3–6 words).
 - Be concise — one tight sentence, as short as the content allows.
 - Use only facts explicitly stated in the trending reason.
-- Only include dates if they appear verbatim in the text below.
+- Only include dates if they appear verbatim in the trending reason.
+
+Article summary:
+{summary}
 
 Trending reason:
 {trending_reason}

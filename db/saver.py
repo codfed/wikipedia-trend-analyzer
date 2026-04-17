@@ -24,6 +24,26 @@ class ArticleSaver:
             print(f"  [saver] insert failed for {article.title}: {e}")
             return False
 
+    def fetch_prior_reason(self, title: str, current_date: str) -> dict | None:
+        """Return the most recent prior row with a usable trending_reason, or None."""
+        try:
+            result = (
+                self._db.table(ARTICLE_TABLE)
+                .select("trending_date,trending_reason,trending_reason_short,trending_reason_source")
+                .eq("title", title)
+                .neq("trending_date", current_date)
+                .not_.is_("trending_reason", "null")
+                .neq("trending_reason", "")
+                .neq("trending_reason", "Unclear why this article is trending.")
+                .order("trending_date", desc=True)
+                .limit(1)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+        except Exception as e:
+            print(f"  [saver] fetch_prior_reason failed for {title}: {e}")
+            return None
+
     def save_eval_result(
         self,
         title: str,
@@ -73,4 +93,5 @@ class ArticleSaver:
             "raw_search_results": article.raw_search_results or None,
             "search_query_used": article.search_query_used,
             "prompt_version": prompt_version,
+            "carried_from_date": article.carried_from_date or None,
         }

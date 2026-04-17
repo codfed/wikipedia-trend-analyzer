@@ -39,6 +39,9 @@ class Article:
     raw_search_results: str = ""
     search_query_used: str = ""
 
+    # Set when trending_reason is carried forward from a prior day's row
+    carried_from_date: Optional[str] = None
+
     def to_dict(self) -> dict:
         return {f.name: getattr(self, f.name) for f in fields(self)}
 

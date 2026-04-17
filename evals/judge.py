@@ -31,11 +31,11 @@ class LLMJudge:
         self, article: Article, raw_results: str
     ) -> EvalResult:
         """Score trending_reason for relevance, accuracy, and format."""
-        if article.trending_reason_source == "rolling_list":
+        if article.trending_reason_source in ("rolling_list", "carried_forward"):
             return EvalResult(
                 field="trending_reason",
                 score=5,
-                reasoning="Rolling-list article — static content, LLM judging skipped.",
+                reasoning=f"{article.trending_reason_source} article — LLM judging skipped.",
                 passed=True,
             )
 
@@ -91,11 +91,11 @@ Respond with ONLY a single-line JSON object:
 
     def score_trending_reason_short(self, article: Article) -> EvalResult:
         """Score trending_reason_short for faithfulness and conciseness."""
-        if article.trending_reason_source == "rolling_list":
+        if article.trending_reason_source in ("rolling_list", "carried_forward"):
             return EvalResult(
                 field="trending_reason_short",
                 score=5,
-                reasoning="Rolling-list article — static content, LLM judging skipped.",
+                reasoning=f"{article.trending_reason_source} article — LLM judging skipped.",
                 passed=True,
             )
 

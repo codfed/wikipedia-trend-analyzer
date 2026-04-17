@@ -49,11 +49,12 @@ def check_banned_phrases(text: str) -> MetricResult:
 
 def run_deterministic_checks(article: Article) -> list[MetricResult]:
     """Run all deterministic checks on an article's generated fields."""
-    if article.trending_reason_source == "rolling_list":
+    if article.trending_reason_source in ("rolling_list", "carried_forward"):
+        label = article.trending_reason_source
         return [MetricResult(
-            check="rolling_list",
+            check=label,
             passed=True,
-            detail="Static rolling-list article — deterministic checks skipped",
+            detail=f"{label} article — deterministic checks skipped",
         )]
 
     results = []

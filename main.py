@@ -24,7 +24,7 @@ load_dotenv()
 from pipeline.fetcher import FeaturedFeedFetcher
 from pipeline.parser import FeaturedArticlesParser
 from pipeline.trending import calculate_trending_status
-from pipeline.enricher import ArticleEnricher
+from pipeline.enricher import ArticleEnricher, _DEATHS_ARTICLE_RE
 from pipeline.models import Article
 
 from search.client import SerperClient
@@ -180,10 +180,20 @@ def main() -> int:
             article = _generate_summary(article, llm_client)
             print(f"  summary ({time.perf_counter() - t0:.2f}s): {article.summary}")
 
-            # 3. Enrich trending articles only
-            if (
-                enricher
-            ):  # and (article.is_newly_trending or article.view_delta_percentage > 0):
+            # 3. Enrich — carry forward prior reason if available, else run pipeline
+            # Rolling-list articles always re-scrape fresh — never carry forward
+            always_fresh = bool(
+                _DEATHS_ARTICLE_RE.match(article.normalized_title or "")
+                or _DEATHS_ARTICLE_RE.match(article.title or "")
+            )
+            prior = article_saver.fetch_prior_reason(article.title, article.date) if (article_saver and not always_fresh) else None
+            if prior:
+                article.trending_reason = prior["trending_reason"]
+                article.trending_reason_short = prior["trending_reason_short"]
+                article.trending_reason_source = "carried_forward"
+                article.carried_from_date = prior["trending_date"]
+                print(f"  [carried_forward] reused reason from {prior['trending_date']}")
+            elif enricher:
                 article = enricher.enrich(article)
                 print(
                     f"  source={article.trending_reason_source}, "
@@ -192,13 +202,7 @@ def main() -> int:
                 print(f"  reason: {article.trending_reason[:120]}")
                 print(f"  short:  {article.trending_reason_short}")
             else:
-                if not enricher:
-                    print("  [skipping enrichment — Serper not configured]")
-                else:
-                    print(
-                        f"  [skipping enrichment — not trending up "
-                        f"(delta={article.view_delta_percentage}%)]"
-                    )
+                print("  [skipping enrichment — Serper not configured]")
 
             # 4. Save
             if article_saver:

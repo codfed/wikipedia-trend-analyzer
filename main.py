@@ -187,13 +187,20 @@ def main() -> int:
                 or _DEATHS_ARTICLE_RE.match(article.title or "")
             )
             prior = article_saver.fetch_prior_reason(article.title, article.date) if (article_saver and not always_fresh) else None
-            if prior:
+            prior_days_old = (
+                (datetime.strptime(article.date, "%Y-%m-%d").date()
+                 - datetime.strptime(prior["trending_date"], "%Y-%m-%d").date()).days
+                if prior else 0
+            )
+            if prior and prior_days_old < 3:
                 article.trending_reason = prior["trending_reason"]
                 article.trending_reason_short = prior["trending_reason_short"]
                 article.trending_reason_source = "carried_forward"
                 article.carried_from_date = prior["trending_date"]
                 print(f"  [carried_forward] reused reason from {prior['trending_date']}")
             elif enricher:
+                if prior:
+                    print(f"  [re-enriching] prior reason is {prior_days_old} days old")
                 article = enricher.enrich(article)
                 print(
                     f"  source={article.trending_reason_source}, "

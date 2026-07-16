@@ -27,3 +27,20 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
         run: python main.py
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Daily run failed $(date -u '+%Y-%m-%d')" \
+            --body "The daily Wikipedia trend analysis workflow failed.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --label "bug" 2>/dev/null || \
+          gh issue create \
+            --title "Daily run failed $(date -u '+%Y-%m-%d')" \
+            --body "The daily Wikipedia trend analysis workflow failed.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

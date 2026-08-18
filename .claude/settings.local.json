@@ -7,7 +7,8 @@
       "Bash(TARGET_DATE=2026-08-05 FORCE_REENRICH=1 .venv/bin/python *)",
       "Bash(python -c ' *)",
       "Bash(python *)",
-      "Bash(gh run *)"
+      "Bash(gh run *)",
+      "Read(//tmp/**)"
     ]
   }
 }

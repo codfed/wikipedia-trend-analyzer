@@ -87,7 +87,12 @@ def main() -> int:
     failures = []
     for d in todo:
         print(f"\n=== {d.isoformat()} ===")
-        env = {**os.environ, "TARGET_DATE": d.isoformat()}
+        # main.py's TARGET_DATE is the featured-feed URL date, not the saved
+        # trending_date: Wikipedia's mostread feed for URL date D always
+        # reports on D-1's traffic (see pipeline/parser.py). To backfill the
+        # gap at `d`, we have to request `d + 1 day`.
+        fetch_date = d + timedelta(days=1)
+        env = {**os.environ, "TARGET_DATE": fetch_date.isoformat()}
         proc = subprocess.run(
             [sys.executable, "main.py"], env=env, capture_output=True, text=True
         )

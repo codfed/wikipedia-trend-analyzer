@@ -2,7 +2,7 @@
 
 # Increment this whenever a prompt changes.  Saved articles and eval results
 # include this version so quality changes can be tracked over time.
-PROMPT_VERSION = "v2.3"
+PROMPT_VERSION = "v2.4"
 
 # ---------------------------------------------------------------------------
 # Summary (always runs, Haiku)
@@ -30,6 +30,11 @@ RELEVANCE_MAX_TOKENS = 64
 RELEVANCE_PROMPT = """You are deciding whether search results are relevant to \
 explaining why a Wikipedia article is suddenly trending.
 
+A valid explanation doesn't have to be a news event — a viral reddit thread, \
+forum discussion, TikTok/YouTube video, or podcast episode is just as valid a \
+cause of a traffic spike as a news story, as long as the content is clearly \
+about the article's subject.
+
 Article title: {title}
 Article summary: {summary}
 
@@ -48,7 +53,7 @@ Respond with ONLY valid JSON on one line:
 EXPLANATION_MODEL = "claude-sonnet-4-6"
 EXPLANATION_TEMPERATURE = 0.3
 EXPLANATION_MAX_TOKENS = 512
-EXPLANATION_PROMPT = """You are a concise news analysis assistant.
+EXPLANATION_PROMPT = """You are a concise trend analysis assistant.
 
 Your task: explain why the Wikipedia article "{title}" is currently trending, \
 using ONLY the search results below. Every substantive claim must be directly \

@@ -47,7 +47,11 @@ Each trending article is searched through sequential stages until a relevant
 result is found.  Stops early:
 - **Stage 1**: Serper news (past week)
 - **Stage 2**: Serper web search (past week)
-- **Stage 3**: Deep — LLM rewrites query (`search/query_rewriter.py`) + Serper (past month)
+- **Stage 3**: Serper `site:reddit.com` search (past month) — catches grassroots
+  virality (e.g. a TIL repost) that predates the article's exact title and can
+  lag its source content by weeks
+- **Stage 4**: Deep — LLM rewrites query (`search/query_rewriter.py`), considering
+  non-news drivers (video, podcast, forum) + Serper (past month)
 - **unknown**: all stages failed → `is_mystery=True`
 
 Relevance is decided by a structured LLM call (`llm/relevance.py`) that returns
@@ -58,7 +62,7 @@ Relevance is decided by a structured LLM call (`llm/relevance.py`) that returns
 |---|---|
 | `trending_reason` | 3–4 sentence explanation |
 | `trending_reason_short` | 12–22 word compressed version |
-| `trending_reason_source` | `"news"` \| `"search"` \| `"deep_search"` \| `"unknown"` |
+| `trending_reason_source` | `"news"` \| `"search"` \| `"reddit"` \| `"deep_search"` \| `"unknown"` |
 
 Replaces the four v1 fields (`news_relation`, `news_relation_short`,
 `search_relation`, `search_relation_short`).

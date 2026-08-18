@@ -25,13 +25,15 @@ class ArticleSaver:
             return False
 
     def fetch_prior_reason(self, title: str, current_date: str) -> dict | None:
-        """Return the most recent prior row with a usable trending_reason, or None."""
+        """Return the most recent row strictly before current_date with a usable
+        trending_reason, or None. Must stay strictly-before (not just != current_date)
+        so out-of-order backfills never carry a reason forward from a future date."""
         try:
             result = (
                 self._db.table(ARTICLE_TABLE)
                 .select("trending_date,trending_reason,trending_reason_short,trending_reason_source")
                 .eq("title", title)
-                .neq("trending_date", current_date)
+                .lt("trending_date", current_date)
                 .not_.is_("trending_reason", "null")
                 .neq("trending_reason", "")
                 .neq("trending_reason", "Unclear why this article is trending.")

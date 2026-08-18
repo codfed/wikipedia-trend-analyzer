@@ -2,7 +2,11 @@ name: Daily Wikipedia Trend Analysis
 
 on:
   schedule:
-    - cron: "0 2 * * *"
+    # Target: 6am Pacific. GitHub Actions cron is UTC-only and doesn't shift
+    # with DST, so both possible UTC offsets are scheduled; the "Guard" step
+    # below skips whichever one isn't actually 6am Pacific on a given day.
+    - cron: "0 13 * * *" # 6am PDT (UTC-7)
+    - cron: "0 14 * * *" # 6am PST (UTC-8)
   workflow_dispatch:
 
 jobs:
@@ -20,27 +24,55 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run analyzer
+      - name: Guard - only proceed at 6am Pacific
+        id: guard
+        if: github.event_name == 'schedule'
+        run: |
+          hour=$(TZ="America/Los_Angeles" date +%H)
+          if [ "$hour" != "06" ]; then
+            echo "It's ${hour}:00 Pacific, not 6am — skipping this cron firing."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run analyzer for all pending dates
+        if: steps.guard.outputs.should_run != 'false'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
-        run: python main.py
+        run: python scripts/run_pending.py 2>&1 | tee run.log
+
+      - name: Upload run log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-log
+          path: run.log
+          retention-days: 14
 
       - name: Notify on failure
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          {
+            echo "The daily Wikipedia trend analysis workflow failed."
+            echo ""
+            echo "**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "**Last 150 lines of output:**"
+            echo '```'
+            tail -n 150 run.log 2>/dev/null || echo "(no log captured — failure happened before the analyzer ran)"
+            echo '```'
+          } > issue_body.md
+
           gh issue create \
             --title "Daily run failed $(date -u '+%Y-%m-%d')" \
-            --body "The daily Wikipedia trend analysis workflow failed.
-
-          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --body-file issue_body.md \
             --label "bug" 2>/dev/null || \
           gh issue create \
             --title "Daily run failed $(date -u '+%Y-%m-%d')" \
-            --body "The daily Wikipedia trend analysis workflow failed.
-
-          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            --body-file issue_body.md

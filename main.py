@@ -9,6 +9,9 @@ Usage:
 
     # Single article (debug)
     TARGET_DATE=2026-04-12 TARGET_TITLE=Shmuel_Mikunis python main.py
+
+    # Force re-enrichment for every article, ignoring carried-forward reasons
+    TARGET_DATE=2026-04-12 FORCE_REENRICH=1 python main.py
 """
 
 import os
@@ -102,6 +105,8 @@ def main() -> int:
     feed = FeaturedFeedFetcher().fetch(target_date=target_date)
     all_articles = FeaturedArticlesParser(feed).parse()
 
+    force_reenrich = os.getenv("FORCE_REENRICH", "").lower() in ("1", "true", "yes")
+
     target_title = os.getenv("TARGET_TITLE")
     articles = all_articles
     if target_title:
@@ -192,7 +197,9 @@ def main() -> int:
                  - datetime.strptime(prior["trending_date"], "%Y-%m-%d").date()).days
                 if prior else 0
             )
-            if prior and prior_days_old < 3:
+            if prior and force_reenrich:
+                print(f"  [force_reenrich] ignoring carried-forward reason from {prior['trending_date']}")
+            if prior and prior_days_old < 3 and not force_reenrich:
                 article.trending_reason = prior["trending_reason"]
                 article.trending_reason_short = prior["trending_reason_short"]
                 article.trending_reason_source = "carried_forward"

@@ -12,7 +12,7 @@ class ExampleBank:
     Schema (example_bank):
         id           uuid, primary key
         title        text
-        trending_reason_source  text  ("news"|"search"|"deep_search")
+        trending_reason_source  text  ("news"|"search"|"reddit"|"deep_search")
         raw_input    text  (the formatted search results used)
         trending_reason  text
         score        int

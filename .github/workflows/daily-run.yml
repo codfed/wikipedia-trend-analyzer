@@ -43,7 +43,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
-        run: python scripts/run_pending.py 2>&1 | tee run.log
+        run: |
+          set -o pipefail
+          python -m scripts.run_pending 2>&1 | tee run.log
 
       - name: Upload run log
         if: failure()

@@ -31,10 +31,33 @@ MAX_DATES_PER_RUN = int(os.getenv("MAX_BACKFILL_DATES", "5"))
 MOSTREAD_NOT_READY_MARKER = "missing the 'mostread' section"
 
 
-def missing_dates() -> list[date]:
+def _existing_dates() -> set[str]:
+    """All distinct trending_date values currently saved, paginated.
+
+    PostgREST hard-caps rows per request at 1000 regardless of .limit(), and
+    this table already holds several thousand rows -- an unpaginated select
+    silently truncates and makes populated dates look missing."""
     db = SupabaseClient().client
-    result = db.table(ARTICLE_TABLE).select("trending_date").execute()
-    have = {row["trending_date"] for row in result.data}
+    have: set[str] = set()
+    page_size = 1000
+    offset = 0
+    while True:
+        result = (
+            db.table(ARTICLE_TABLE)
+            .select("trending_date")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        rows = result.data
+        have.update(row["trending_date"] for row in rows)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+    return have
+
+
+def missing_dates() -> list[date]:
+    have = _existing_dates()
 
     dates = []
     d = EARLIEST_DATE

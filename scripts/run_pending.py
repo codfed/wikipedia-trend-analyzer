@@ -59,10 +59,14 @@ def _existing_dates() -> set[str]:
 def missing_dates() -> list[date]:
     have = _existing_dates()
 
+    # Today's trending_date can never exist yet -- its feed is only published
+    # under tomorrow's URL (see the fetch_date comment below) -- so stop at
+    # yesterday instead of wasting a backfill slot on a guaranteed no-op.
+    last_fillable = date.today() - timedelta(days=1)
+
     dates = []
     d = EARLIEST_DATE
-    today = date.today()
-    while d <= today:
+    while d <= last_fillable:
         if d.isoformat() not in have:
             dates.append(d)
         d += timedelta(days=1)

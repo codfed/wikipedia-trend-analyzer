@@ -6,7 +6,8 @@
       "Bash(grep -v \"^[^:]*:\\\\s*#\\\\s*-\\\\{5,\\\\}\\\\|^[^:]*:\\\\s*#\\\\s*[A-Z][A-Za-z\\\\s]*$\")",
       "Bash(TARGET_DATE=2026-08-05 FORCE_REENRICH=1 .venv/bin/python *)",
       "Bash(python -c ' *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(gh run *)"
     ]
   }
 }

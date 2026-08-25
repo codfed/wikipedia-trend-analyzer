@@ -78,7 +78,45 @@ All prompts live in `llm/prompts.py`.  `PROMPT_VERSION` is a string constant
 (e.g. `"v2.0"`) stored with every saved article and eval result, enabling
 quality tracking across prompt changes.
 
-### 5. Eval-First Design
+### 5. Daily Trend Summary (`pipeline/daily_stats.py`, `llm/daily_summary.py`)
+Runs once per date after the per-article loop finishes, not per-article --
+relating trends to each other requires seeing the whole day's list at once.
+
+`compute_daily_stats` derives streak length and view-delta trajectory
+(`accelerating`/`declining`/`plateauing`) for every article purely from
+`trending_articles_v2` rows already saved (no LLM). It also splits titles
+into `organic` vs `bot_traffic` via a hand-maintained list
+(`BOT_TRAFFIC_TITLES`) -- generic/domain-name-style titles and obscure
+geography stubs that persistently trend with no real driver (e.g. `Google`,
+`.xyz`, `Neatsville, Kentucky`). There's no reliable numeric signature for
+this (Google is also genuinely newsworthy most days), so it's curated by
+hand as new offenders are spotted.
+
+`DailySummaryGenerator` makes one LLM call per date to produce structured
+rows, not narrative prose. It only asks the model to judge one thing:
+whether two or more *new* articles share the same real-world story and
+should be merged into a `new_cluster` row. Everything else -- whether a
+continuing article is a rolling reference page (`List of ...`, `Deaths in
+YYYY`) vs. a real story, and whether a title is bot-traffic -- is decided
+deterministically in Python before the prompt is built, and a continuing
+article's title is filtered out of any `new_rows` cluster it might have
+been merged into (a defense against the model rendering the exact same
+trend twice).
+
+Output rows are saved to `daily_trend_rows` via `DailySummarySaver`, which
+deletes-then-inserts per date rather than upserting -- clusters have no
+natural unique key, and a re-run for the same date should fully replace the
+prior rows, not accumulate duplicates.
+
+| `category` | Meaning |
+|---|---|
+| `new` | A single article trending for the first time |
+| `new_cluster` | Two+ new articles sharing the same real-world story |
+| `ongoing_trend` | A continuing article with a real news arc |
+| `ongoing_list` | A continuing rolling/reference page (`List of ...`, `Deaths in YYYY`) |
+| `ongoing_anomaly` | A continuing article on `BOT_TRAFFIC_TITLES` |
+
+### 6. Eval-First Design
 Evals run automatically after every pipeline run.  Two fields are evaluated:
 - `trending_reason` — faithfulness + format (LLM judge + deterministic checks)
 - `trending_reason_short` — word count gate + faithfulness (LLM judge)
@@ -98,6 +136,9 @@ Results are printed to stdout and optionally persisted to `eval_results`.
 | `memory/example_bank.py` | Read/write high-scoring examples |
 | `evals/runner.py` | Run all checks; log to Supabase |
 | `db/saver.py` | Upsert to `trending_articles_v2` + `eval_results` |
+| `pipeline/daily_stats.py` | Streak length + view-delta trajectory + bot-traffic classification, no LLM |
+| `llm/daily_summary.py` | One LLM call/date; produces structured `daily_trend_rows` |
+| `db/daily_summary_saver.py` | Delete-then-insert `daily_trend_rows` per date |
 
 ## Supabase Tables Required
 
@@ -162,6 +203,21 @@ create table prompt_run_log (
   article_count int,
   created_at timestamptz default now()
 );
+
+-- Daily trend summary rows (see "Daily Trend Summary" above)
+create table daily_trend_rows (
+  id uuid primary key default gen_random_uuid(),
+  trending_date date not null,
+  category text not null check (category in ('new', 'new_cluster', 'ongoing_trend', 'ongoing_list', 'ongoing_anomaly')),
+  titles text[] not null,
+  headline text not null,
+  summary text not null,
+  streak_days int,
+  trajectory text,
+  prompt_version text,
+  created_at timestamptz default now()
+);
+create index idx_daily_trend_rows_date on daily_trend_rows (trending_date);
 ```
 
 ## Adding a New LLM Field

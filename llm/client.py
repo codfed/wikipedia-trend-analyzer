@@ -59,4 +59,8 @@ class LLMClient:
             cleaned = "\n".join(
                 line for line in lines if not line.startswith("```")
             ).strip()
-        return json.loads(cleaned)
+        # raw_decode (not json.loads) so trailing text after a valid JSON
+        # value -- e.g. the model second-guessing itself with "Wait, let me
+        # fix that:" plus a corrected blob -- doesn't fail the whole parse.
+        obj, _ = json.JSONDecoder().raw_decode(cleaned)
+        return obj

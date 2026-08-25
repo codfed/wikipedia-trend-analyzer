@@ -2,7 +2,7 @@
 
 # Increment this whenever a prompt changes.  Saved articles and eval results
 # include this version so quality changes can be tracked over time.
-PROMPT_VERSION = "v2.4"
+PROMPT_VERSION = "v2.5"
 
 # ---------------------------------------------------------------------------
 # Summary (always runs, Haiku)
@@ -61,8 +61,7 @@ supported by those results—no speculation, no invented names, dates, numbers, 
 or causal links that the results do not state.
 
 Rules:
-- One clear thread: lead with the main reason, then only what is needed for context. \
-Use at most three short sentences; one or two is better if that fully answers it.
+{length_rule}
 - Stay direct: no filler, no meandering asides, no repeating the same point in different words.
 - Do NOT hedge with "likely", "perhaps", "may have", or similar unless the search text \
 uses that uncertainty explicitly.
@@ -76,6 +75,27 @@ Search results ({source_type}):
 Article summary: {summary}
 
 Explanation:"""
+
+DEFAULT_LENGTH_RULE = (
+    "- One clear thread: lead with the main reason, then only what is needed for context. "
+    "Use at most three short sentences; one or two is better if that fully answers it."
+)
+
+# Reddit results are the most colorful source this pipeline sees, and the
+# generic 1-3 sentence rule squeezes out exactly the detail that makes them
+# fun to read — which subreddits, and in whose words.
+REDDIT_LENGTH_RULE = (
+    "- This is Reddit-sourced — the most entertaining source type in this project, so be "
+    "verbose here: 4-6 sentences is expected, not the usual one-to-three.\n"
+    "- Name the specific subreddit(s) involved by their r/name (each result below is "
+    "prefixed with the subreddit it came from) — never just say \"Reddit users.\"\n"
+    "- Quote distinctive phrases from the results in quotation marks when they capture the "
+    "tone, a repeated meme/copypasta, or a specific claim.\n"
+    "- If the same odd phrase shows up across multiple unrelated subreddits, say so "
+    "explicitly — that spread pattern is often the actual story.\n"
+    "- Every subreddit name and quote must come verbatim from the results below — never "
+    "invent one."
+)
 
 # ---------------------------------------------------------------------------
 # Short summary (Haiku, condenses the full explanation)
@@ -100,3 +120,44 @@ Trending reason:
 {trending_reason}
 
 Short summary:"""
+
+# ---------------------------------------------------------------------------
+# Daily trend rows (Sonnet, structured JSON) -- run once per day
+# ---------------------------------------------------------------------------
+DAILY_SUMMARY_MODEL = "claude-sonnet-4-6"
+DAILY_SUMMARY_TEMPERATURE = 0.3
+DAILY_SUMMARY_MAX_TOKENS = 2048
+DAILY_SUMMARY_PROMPT = """You are producing a scannable list of today's newly-trending \
+Wikipedia articles -- the goal is for a reader to skim it and think "oh yeah, I heard about \
+that" for anything they've seen elsewhere, with an easy path to learn more about each one.
+
+NEW ARTICLES (first appeared today):
+{new_articles_block}
+
+Task:
+1. Most articles get their own entry -- a quick one-line blurb, terse enough to skim.
+2. Only when two or more articles share the same real-world story or event, group them into \
+a single cluster entry instead of separate ones. A cluster gets ONE blurb that synthesizes \
+why the story matters as a whole (not each article's blurb stacked together). Don't force a \
+connection that isn't directly supported by the reasons given -- a shared vague theme is not \
+enough, it must be the same underlying story or event.
+3. Every article listed above must end up in exactly one entry.
+4. Each entry also gets a headline -- a punchy, news-ticker-style headline, 4-8 words, \
+present tense, no filler like "is trending" or "after". Lead with the subject. When an \
+entry is fundamentally about a conflict or back-and-forth between two people/sides, an \
+emoji connector can stand in for the relationship instead of spelling it out in prose \
+(e.g. a boxing glove for a feud). Examples of the target tone: "Hayden Panettiere dies from \
+cardiac arrest", "Natalie Harp 🥊 Melania Trump continues".
+
+Rules:
+- Every claim must be traceable to the reasons given below -- no speculation.
+- Headline: 4-8 words, punchy, present tense.
+- Summary: a single tight sentence for standalone articles, up to two sentences for a \
+cluster synthesizing the shared story.
+- These fields are JSON string values: never put a literal " character inside a headline \
+or summary, even to quote someone -- use single quotes ('like this') for any quoted phrase \
+instead.
+
+Respond with ONLY valid JSON and nothing else -- no explanation before or after, no \
+corrections, no markdown fences:
+{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "..."}}]}}"""

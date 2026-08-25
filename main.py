@@ -54,6 +54,10 @@ from memory.prompt_tracker import PromptTracker
 from evals.runner import run_evals
 from evals.judge import LLMJudge
 
+from pipeline.daily_stats import compute_daily_stats
+from llm.daily_summary import DailySummaryGenerator
+from db.daily_summary_saver import DailySummarySaver
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -256,6 +260,26 @@ def main() -> int:
     if supabase_client and processed:
         date_str = processed[0].date
         prompt_tracker.log_run(date_str, PROMPT_VERSION, len(processed))
+
+    # --- Daily trend summary (new/continuing rows, once per date) ---
+    if supabase_client and processed and not os.getenv("SKIP_DAILY_SUMMARY"):
+        date_str = processed[0].date
+        print(f"\n{'=' * 72}")
+        print(f"Building daily trend summary for {date_str}…")
+        print(f"{'=' * 72}")
+        try:
+            titles = [a.normalized_title for a in processed]
+            stats = compute_daily_stats(supabase_client, date_str, titles)
+            rows = DailySummaryGenerator(llm_client).generate(
+                date_str, [a.to_dict() for a in processed], stats
+            )
+            DailySummarySaver(supabase_client).save_rows(date_str, rows, PROMPT_VERSION)
+            print(f"  Saved {len(rows)} daily trend row(s)")
+        except Exception as e:
+            print(f"  [daily_summary] failed: {e}")
+            import traceback
+
+            traceback.print_exc()
 
     print(f"\n{'=' * 72}")
     print(f"Done. Processed={len(processed)}, Saves={saves_ok}/{len(articles)}")

@@ -23,10 +23,13 @@ class LLMClient:
         max_tokens: int = 1024,
     ) -> str:
         """Send a plain text prompt; return stripped text response."""
+        # anthropic>=1.0.0 dropped `temperature` from messages.create() --
+        # it's no longer forwarded to the API. Kept as a param here so
+        # existing call sites (main.py, generator.py, relevance.py, etc.)
+        # don't need to change.
         response = self._client.messages.create(
             model=model,
             max_tokens=max_tokens,
-            temperature=temperature,
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text

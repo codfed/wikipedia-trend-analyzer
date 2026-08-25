@@ -262,7 +262,7 @@ def main() -> int:
     print(f"Prompt version: {PROMPT_VERSION}")
     print(f"{'=' * 72}")
 
-    if article_saver and saves_ok == 0 and processed:
+    if article_saver and saves_ok == 0 and articles:
         print("ERROR: all Supabase saves failed.")
         return 1
 

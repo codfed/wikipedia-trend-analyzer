@@ -2,11 +2,17 @@ name: Daily Wikipedia Trend Analysis
 
 on:
   schedule:
-    # Target: 6am Pacific. GitHub Actions cron is UTC-only and doesn't shift
-    # with DST, so both possible UTC offsets are scheduled; the "Guard" step
-    # below skips whichever one isn't actually 6am Pacific on a given day.
-    - cron: "0 13 * * *" # 6am PDT (UTC-7)
-    - cron: "0 14 * * *" # 6am PST (UTC-8)
+    # Target: 6am Pacific, but GitHub Actions scheduled runs are best-effort
+    # and can fire hours late under load -- observed drift as high as 6+
+    # hours in practice. There's no "skip if not 6am" guard: run_pending.py
+    # is idempotent (no-ops once caught up), so firing more often than
+    # needed just costs a few wasted seconds, while gating on an exact hour
+    # risks silently skipping every firing for days if GitHub's scheduler
+    # drifts outside that hour, which is exactly what happened.
+    - cron: "0 13 * * *"
+    - cron: "0 14 * * *"
+    - cron: "0 19 * * *"
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 jobs:
@@ -24,20 +30,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Guard - only proceed at 6am Pacific
-        id: guard
-        if: github.event_name == 'schedule'
-        run: |
-          hour=$(TZ="America/Los_Angeles" date +%H)
-          if [ "$hour" != "06" ]; then
-            echo "It's ${hour}:00 Pacific, not 6am — skipping this cron firing."
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Run analyzer for all pending dates
-        if: steps.guard.outputs.should_run != 'false'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

@@ -55,6 +55,15 @@ class LLMJudge:
                 passed=False,
             )
 
+        if article.trending_reason_source == "reddit":
+            length_expectation = (
+                "roughly four to six sentences — reddit explanations are expected to be "
+                "more verbose, naming specific subreddits by r/name and quoting distinctive "
+                "phrases from the results, so do NOT penalise length or direct quotes here"
+            )
+        else:
+            length_expectation = "roughly one to three short sentences"
+
         prompt = f"""You are a strict evaluator of AI-generated explanations for \
 why Wikipedia articles are trending.
 
@@ -70,9 +79,11 @@ AI-generated explanation (trending_reason):
 Score 1–5 on this rubric:
 - Relevance: Does the explanation reflect why the article is trending?
 - Groundedness: Are all substantive claims in the explanation traceable to the search results? \
-Penalise invented facts, unstated dates or figures, or implications not supported by the text.
+Penalise invented facts, unstated dates or figures, or implications not supported by the text. \
+Quoted phrases and named subreddits count as grounded as long as they appear in the search \
+results above.
 - Anti-ramble: Is prose tight (no filler, repetitive restatement, or tangential asides)?
-- Format: Reasonable length (roughly one to three short sentences). Does NOT start with \
+- Format: Reasonable length ({length_expectation}). Does NOT start with \
 "Here is the reason why…" or "The article is trending because…"? Avoids "spotlight" and "widespread"?
 
 Critical rules for your reasoning field:

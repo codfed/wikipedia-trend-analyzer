@@ -9,6 +9,8 @@ from llm.prompts import (
     EXPLANATION_TEMPERATURE,
     EXPLANATION_MAX_TOKENS,
     EXPLANATION_PROMPT,
+    DEFAULT_LENGTH_RULE,
+    REDDIT_LENGTH_RULE,
     SHORT_MODEL,
     SHORT_TEMPERATURE,
     SHORT_MAX_TOKENS,
@@ -33,12 +35,16 @@ class ExplanationGenerator:
         """Return (trending_reason, trending_reason_short)."""
         few_shot_block = self._build_few_shot_block(search_result.stage)
 
+        length_rule = (
+            REDDIT_LENGTH_RULE if search_result.stage == "reddit" else DEFAULT_LENGTH_RULE
+        )
         prompt = EXPLANATION_PROMPT.format(
             title=article.normalized_title,
             summary=article.summary or article.extract[:200],
             source_type=search_result.stage,
             results=search_result.formatted[:3000],
             few_shot_block=few_shot_block,
+            length_rule=length_rule,
         )
         trending_reason = self.llm_client.generate(
             prompt=prompt,

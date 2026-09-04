@@ -212,6 +212,7 @@ create table daily_trend_rows (
   titles text[] not null,
   headline text not null,
   summary text not null,
+  image_url text,
   streak_days int,
   trajectory text,
   prompt_version text,

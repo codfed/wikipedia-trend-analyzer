@@ -148,6 +148,17 @@ entry is fundamentally about a conflict or back-and-forth between two people/sid
 emoji connector can stand in for the relationship instead of spelling it out in prose \
 (e.g. a boxing glove for a feud). Examples of the target tone: "Hayden Panettiere dies from \
 cardiac arrest", "Natalie Harp 🥊 Melania Trump continues".
+5. Each entry also gets subject_title: whichever single title from its own "titles" list is \
+the entry's actual face -- the one a cover image should show. For a standalone entry this is \
+just that one title. For a cluster, pick whichever member the headline is really about (e.g. \
+for a headline like "Dolly Parton dies at 80" covering 17 related titles, the subject is \
+"Dolly Parton", not one of the tribute/filmography articles pulled in around it).
+6. Each entry also gets image_worthy (true/false). This is only meaningful for standalone \
+entries -- set it true when the story has real visual/narrative novelty: absurd, grisly, \
+bizarre, or something that came out of nowhere. Most routine news (a transfer, a signing, a \
+trailer drop, an index change) should be false. Err toward false -- this should flag a \
+minority of standalone entries, not most of them. For cluster entries this field is ignored, \
+set it true.
 
 Rules:
 - Every claim must be traceable to the reasons given below -- no speculation.
@@ -160,4 +171,4 @@ instead.
 
 Respond with ONLY valid JSON and nothing else -- no explanation before or after, no \
 corrections, no markdown fences:
-{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "..."}}]}}"""
+{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "...", "subject_title": "...", "image_worthy": true}}]}}"""

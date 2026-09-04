@@ -1,10 +1,24 @@
 """TieredSearcher: runs search stages until a relevant result is found."""
 import json
+import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Optional
 
 from pipeline.models import Article
 from search.client import SerperClient
+
+
+def _date_window(article: Article, days_back: int) -> str:
+    """Absolute Google date-range filter anchored on the article's actual
+    trending_date, not on real "now". Google's qdr:w/qdr:m always resolve
+    relative to when the request fires -- correct for live runs (today ≈
+    trending_date), but wrong for backfills run long after the fact, where
+    it would search around today instead of around the historical date."""
+    anchor = datetime.strptime(article.date, "%Y-%m-%d").date()
+    start = anchor - timedelta(days=days_back)
+    end = anchor + timedelta(days=1)
+    return f"cdr:1,cd_min:{start.strftime('%m/%d/%Y')},cd_max:{end.strftime('%m/%d/%Y')}"
 
 
 @dataclass
@@ -84,7 +98,7 @@ class TieredSearcher:
 
     def _try_news(self, query: str, article: Article) -> SearchResult:
         try:
-            raw_data = self.serper.news(query, time_range="qdr:w")
+            raw_data = self.serper.news(query, time_range=_date_window(article, 7))
         except Exception as e:
             print(f"  [tiered] news search failed: {e}")
             return self._empty_result("news", query)
@@ -102,7 +116,7 @@ class TieredSearcher:
 
     def _try_web(self, query: str, article: Article) -> SearchResult:
         try:
-            raw_data = self.serper.search(query, time_range="qdr:w")
+            raw_data = self.serper.search(query, time_range=_date_window(article, 7))
         except Exception as e:
             print(f"  [tiered] web search failed: {e}")
             return self._empty_result("search", query)
@@ -121,12 +135,12 @@ class TieredSearcher:
     def _try_reddit(self, query: str, article: Article) -> SearchResult:
         reddit_query = f"site:reddit.com {query}"
         try:
-            raw_data = self.serper.search(reddit_query, time_range="qdr:m")
+            raw_data = self.serper.search(reddit_query, time_range=_date_window(article, 30))
         except Exception as e:
             print(f"  [tiered] reddit search failed: {e}")
             return self._empty_result("reddit", reddit_query)
 
-        formatted = _format_organic(raw_data)
+        formatted = _format_reddit(raw_data)
         relevant, confidence = self._check_relevance(article, formatted, "reddit")
         return SearchResult(
             stage="reddit",
@@ -146,7 +160,7 @@ class TieredSearcher:
 
         print(f"  [tiered] deep search with rewritten query: {rewritten!r}")
         try:
-            raw_data = self.serper.search(rewritten, time_range="qdr:m")
+            raw_data = self.serper.search(rewritten, time_range=_date_window(article, 30))
         except Exception as e:
             print(f"  [tiered] deep search request failed: {e}")
             return self._empty_result("deep_search", rewritten)
@@ -212,4 +226,25 @@ def _format_organic(data: dict) -> str:
         snippet = item.get("snippet", "")
         link = item.get("link", "")
         lines.append(f"{title} ({link}): {snippet}")
+    return "\n".join(lines)
+
+
+_SUBREDDIT_RE = re.compile(r"reddit\.com/r/([A-Za-z0-9_]+)", re.IGNORECASE)
+
+
+def _format_reddit(data: dict) -> str:
+    """Like _format_organic, but pulls the subreddit out of each link and
+    puts it up front — the explanation prompt names specific subreddits, so
+    it needs them as an explicit field rather than buried in a URL."""
+    items = data.get("organic", [])
+    if not items:
+        return ""
+    lines = []
+    for item in items[:10]:
+        title = item.get("title", "")
+        snippet = item.get("snippet", "")
+        link = item.get("link", "")
+        m = _SUBREDDIT_RE.search(link)
+        subreddit = f"r/{m.group(1)}" if m else "r/unknown"
+        lines.append(f'{subreddit} — "{title}": {snippet}')
     return "\n".join(lines)

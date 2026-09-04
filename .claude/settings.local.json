@@ -8,7 +8,12 @@
       "Bash(python -c ' *)",
       "Bash(python *)",
       "Bash(gh run *)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /tmp/reddit_check.json -w \"HTTP_STATUS:%{http_code}\\\\n\" -A \"Mozilla/5.0 \\(compatible; research-check/1.0\\)\" \"https://www.reddit.com/r/FortNiteBR/comments/1ul4rhh.json\")",
+      "Bash(xargs -I{} echo {})",
+      "Bash(gh issue *)",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)"
     ]
   }
 }

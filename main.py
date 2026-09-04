@@ -58,6 +58,12 @@ from pipeline.daily_stats import compute_daily_stats
 from llm.daily_summary import DailySummaryGenerator
 from db.daily_summary_saver import DailySummarySaver
 
+# If more than this fraction of articles error out of enrichment, treat the
+# whole run as failed rather than silently continuing -- a high failure
+# rate is almost always a systemic bug (bad prompt template, broken client)
+# rather than one flaky article.
+MAX_ARTICLE_FAILURE_RATE = float(os.getenv("MAX_ARTICLE_FAILURE_RATE", "0.2"))
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -170,6 +176,7 @@ def main() -> int:
     # --- Process articles ---
     processed: list[Article] = []
     saves_ok = 0
+    article_errors: list[str] = []
 
     for i, article in enumerate(articles, 1):
         print(f"\n{'=' * 72}")
@@ -241,6 +248,7 @@ def main() -> int:
 
             traceback.print_exc()
             print("  Continuing to next article…")
+            article_errors.append(f"{article.title}: {e}")
 
     # --- Run evals on just-processed articles ---
     enriched = [a for a in processed if a.trending_reason]
@@ -262,6 +270,7 @@ def main() -> int:
         prompt_tracker.log_run(date_str, PROMPT_VERSION, len(processed))
 
     # --- Daily trend summary (new/continuing rows, once per date) ---
+    daily_summary_failed = False
     if supabase_client and processed and not os.getenv("SKIP_DAILY_SUMMARY"):
         date_str = processed[0].date
         print(f"\n{'=' * 72}")
@@ -280,17 +289,41 @@ def main() -> int:
             import traceback
 
             traceback.print_exc()
+            daily_summary_failed = True
 
     print(f"\n{'=' * 72}")
     print(f"Done. Processed={len(processed)}, Saves={saves_ok}/{len(articles)}")
     print(f"Prompt version: {PROMPT_VERSION}")
     print(f"{'=' * 72}")
 
+    # --- Decide run status ---
+    # Per-article exceptions are swallowed above so one flaky article
+    # doesn't sink the whole run, but a high failure rate usually means a
+    # systemic bug (e.g. a bad prompt template) silently eating every
+    # article -- that must fail the job loudly, not print-and-continue.
+    run_failed = False
+
     if article_saver and saves_ok == 0 and articles:
         print("ERROR: all Supabase saves failed.")
-        return 1
+        run_failed = True
 
-    return 0
+    if article_errors:
+        failure_rate = len(article_errors) / len(articles)
+        print(f"\n{len(article_errors)}/{len(articles)} article(s) failed:")
+        for line in article_errors:
+            print(f"  - {line}")
+        if failure_rate > MAX_ARTICLE_FAILURE_RATE:
+            print(
+                f"ERROR: article failure rate {failure_rate:.0%} exceeds "
+                f"{MAX_ARTICLE_FAILURE_RATE:.0%} threshold."
+            )
+            run_failed = True
+
+    if daily_summary_failed:
+        print("ERROR: daily trend summary failed.")
+        run_failed = True
+
+    return 1 if run_failed else 0
 
 
 def _maybe_store_examples(

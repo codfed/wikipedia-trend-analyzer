@@ -31,15 +31,17 @@ class DailySummaryGenerator:
         stats: dict[str, TrendStats],
     ) -> list[dict]:
         """Return row dicts ready to insert into `daily_trend_rows`:
-        {category, titles, headline, summary, streak_days, trajectory}.
+        {category, titles, headline, summary, image_url, streak_days, trajectory}.
 
-        `articles` is a list of dicts with at least `normalized_title` and
-        `trending_reason` (or `trending_reason_short`) keys. Continuing
-        articles and BOT_TRAFFIC_TITLES are dropped entirely -- no rows yet.
+        `articles` is a list of dicts with at least `normalized_title`,
+        `thumbnail`, and `trending_reason` (or `trending_reason_short`)
+        keys. Continuing articles and BOT_TRAFFIC_TITLES are dropped
+        entirely -- no rows yet.
         """
         new_block_lines = []
         eligible_titles: set[str] = set()
         reasons_by_title: dict[str, str] = {}
+        thumbnails_by_title: dict[str, str] = {}
 
         for article in articles:
             title = article["normalized_title"]
@@ -55,6 +57,8 @@ class DailySummaryGenerator:
             new_block_lines.append(f"- {title}: {reason}")
             eligible_titles.add(title)
             reasons_by_title[title] = reason
+            if article.get("thumbnail"):
+                thumbnails_by_title[title] = article["thumbnail"]
 
         if not eligible_titles:
             return []
@@ -77,24 +81,40 @@ class DailySummaryGenerator:
             if not titles:
                 continue
             claimed.update(titles)
+            is_cluster = len(titles) > 1
+
+            subject_title = row.get("subject_title")
+            if subject_title not in titles:
+                subject_title = titles[0]
+
+            # Clusters always get an image when the subject has a thumbnail
+            # (a "cover story" deserves one whenever the data allows it).
+            # Standalone entries only get one when the model flagged real
+            # visual/narrative novelty -- most routine news stays image-free.
+            image_worthy = is_cluster or bool(row.get("image_worthy"))
+            image_url = thumbnails_by_title.get(subject_title) if image_worthy else None
+
             rows.append({
-                "category": CATEGORY_NEW if len(titles) == 1 else CATEGORY_NEW_CLUSTER,
+                "category": CATEGORY_NEW_CLUSTER if is_cluster else CATEGORY_NEW,
                 "titles": titles,
                 "headline": row.get("headline", ""),
                 "summary": row.get("summary", ""),
+                "image_url": image_url,
                 "streak_days": None,
                 "trajectory": None,
             })
 
         # Safety net: the model can drop a title on the floor entirely --
         # never let an article vanish from the digest. Fall back to its own
-        # reason text as the blurb and the raw title as the headline.
+        # reason text as the blurb and the raw title as the headline. No
+        # image -- there's no model judgment on novelty for these.
         for title in sorted(eligible_titles - claimed):
             rows.append({
                 "category": CATEGORY_NEW,
                 "titles": [title],
                 "headline": title,
                 "summary": reasons_by_title[title],
+                "image_url": None,
                 "streak_days": None,
                 "trajectory": None,
             })

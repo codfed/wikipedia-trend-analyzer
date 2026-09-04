@@ -12,6 +12,7 @@ class DailySummarySaver:
         titles         text[]
         headline       text
         summary        text
+        image_url      text
         streak_days    int
         trajectory     text
         prompt_version text
@@ -40,6 +41,7 @@ class DailySummarySaver:
                     "titles": row["titles"],
                     "headline": row["headline"],
                     "summary": row["summary"],
+                    "image_url": row.get("image_url"),
                     "streak_days": row.get("streak_days"),
                     "trajectory": row.get("trajectory"),
                     "prompt_version": prompt_version,

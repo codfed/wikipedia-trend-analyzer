@@ -103,6 +103,14 @@ article's title is filtered out of any `new_rows` cluster it might have
 been merged into (a defense against the model rendering the exact same
 trend twice).
 
+The one continuing-article row that *is* built today is the obituary row for
+`Deaths in YYYY`: `pipeline/enricher.py`'s `_enrich_deaths_article` already
+scrapes that date's entries via `pipeline/deaths_scraper.py` and stores them
+on `Article.death_entries`; `main.py` turns that straight into an
+`ongoing_list` row (one bullet per entry) without going through the LLM --
+it's a verbatim slice of Wikipedia's own list, not something that needs
+synthesis. Other rolling/reference pages (`List of ...`) still get no row.
+
 Output rows are saved to `daily_trend_rows` via `DailySummarySaver`, which
 deletes-then-inserts per date rather than upserting -- clusters have no
 natural unique key, and a re-run for the same date should fully replace the

@@ -42,6 +42,10 @@ class Article:
     # Set when trending_reason is carried forward from a prior day's row
     carried_from_date: Optional[str] = None
 
+    # Structured per-day entries scraped for "Deaths in YYYY" rolling-list
+    # articles (see pipeline/deaths_scraper.py) -- empty for every other article
+    death_entries: list = field(default_factory=list)
+
     def to_dict(self) -> dict:
         return {f.name: getattr(self, f.name) for f in fields(self)}
 

@@ -282,6 +282,26 @@ def main() -> int:
             rows = DailySummaryGenerator(llm_client).generate(
                 date_str, [a.to_dict() for a in processed], stats
             )
+
+            # Obituary row: deterministic, not LLM-generated -- it's just
+            # today's slice of the "Deaths in YYYY" rolling list, already
+            # scraped verbatim by pipeline/deaths_scraper.py. No synthesis
+            # needed, so it's built here rather than routed through
+            # DailySummaryGenerator's new-article clustering prompt.
+            for article in processed:
+                if not article.death_entries:
+                    continue
+                s = stats.get(article.normalized_title)
+                rows.append({
+                    "category": "ongoing_list",
+                    "titles": [article.normalized_title],
+                    "headline": article.normalized_title,
+                    "summary": "\n".join(f"• {e}" for e in article.death_entries),
+                    "image_url": None,
+                    "streak_days": s.streak_days if s else None,
+                    "trajectory": s.trajectory if s else None,
+                })
+
             DailySummarySaver(supabase_client).save_rows(date_str, rows, PROMPT_VERSION)
             print(f"  Saved {len(rows)} daily trend row(s)")
         except Exception as e:

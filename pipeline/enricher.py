@@ -89,6 +89,7 @@ class ArticleEnricher:
         article.raw_search_results = raw_section
         article.search_query_used = api_url
         article.is_mystery = False
+        article.death_entries = entries
         print(
             f"  [enricher] Deaths article — scraped {len(entries)} entries "
             f"for {month_name} {day}"

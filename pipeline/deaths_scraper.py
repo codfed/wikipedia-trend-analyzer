@@ -114,6 +114,12 @@ def _clean_wikitext(text: str) -> str:
         url = "https://en.wikipedia.org/wiki/" + article.replace(" ", "_")
         return f"[{display}]({url})"
 
+    # <ref>...</ref> and self-closing <ref .../> citations → remove entirely
+    # (must run before the [[link]] pass -- ref content often embeds its own
+    # [url text] / [[wiki links]] that would otherwise leak through)
+    text = re.sub(r'<ref[^>]*/>', '', text)
+    text = re.sub(r'<ref[^>]*>.*?</ref>', '', text, flags=re.DOTALL)
+
     text = re.sub(r'\[\[([^\]]+)\]\]', _wiki_link, text)
     # {{template|...}} → remove entirely
     text = re.sub(r'\{\{[^}]*\}\}', '', text)
@@ -121,4 +127,4 @@ def _clean_wikitext(text: str) -> str:
     text = re.sub(r'\[\d+\]', '', text)
     # '''bold''' and ''italic'' → plain text
     text = text.replace("'''", '').replace("''", '')
-    return text.strip()
+    return re.sub(r'\s+', ' ', text).strip()

@@ -5,6 +5,14 @@ trending_articles_v2 -- skips fetch/search/LLM-enrichment/eval entirely.
 Useful for iterating on DailySummaryGenerator or the obituary row without
 re-running (and re-billing) the full per-article pipeline.
 
+TARGET_DATE here means the same thing it means for main.py and
+scripts/run_pending.py: the featured-feed URL date, which always reports on
+the PRIOR day's traffic. So TARGET_DATE=2026-09-03 rebuilds the digest for
+trending_date=2026-09-02, the date that was actually saved to
+trending_articles_v2 when main.py was run with that same TARGET_DATE. Passing
+the trending_date directly here (off by one from every other script's
+TARGET_DATE) is the single most likely way to get an empty or wrong digest.
+
 Usage:
     TARGET_DATE=2026-09-03 python -m scripts.run_daily_summary
 
@@ -13,7 +21,7 @@ Usage:
 """
 import os
 import sys
-from datetime import date
+from datetime import date, timedelta
 
 from dotenv import load_dotenv
 
@@ -31,8 +39,10 @@ ARTICLE_TABLE = "trending_articles_v2"
 
 
 def main() -> int:
-    target_date = os.getenv("TARGET_DATE") or date.today().isoformat()
-    print(f"Building daily summary for {target_date}")
+    target_date_str = os.getenv("TARGET_DATE") or date.today().isoformat()
+    target_date = date.fromisoformat(target_date_str)
+    trending_date = (target_date - timedelta(days=1)).isoformat()
+    print(f"TARGET_DATE={target_date_str} -> building digest for trending_date={trending_date}")
 
     supabase_client = SupabaseClient()
     db = supabase_client.client
@@ -40,24 +50,27 @@ def main() -> int:
     saved = (
         db.table(ARTICLE_TABLE)
         .select("normalized_title,title,thumbnail,trending_reason,trending_reason_short")
-        .eq("trending_date", target_date)
+        .eq("trending_date", trending_date)
         .execute()
     ).data
 
     if not saved:
-        print(f"No saved articles for {target_date} -- run main.py for that date first.")
+        print(
+            f"No saved articles for trending_date={trending_date} -- "
+            f"run 'TARGET_DATE={target_date_str} python main.py' first."
+        )
         return 1
     print(f"Found {len(saved)} saved article(s)")
 
     titles = [r["normalized_title"] for r in saved]
-    stats = compute_daily_stats(supabase_client, target_date, titles)
+    stats = compute_daily_stats(supabase_client, trending_date, titles)
 
-    rows = DailySummaryGenerator(LLMClient()).generate(target_date, saved, stats)
+    rows = DailySummaryGenerator(LLMClient()).generate(trending_date, saved, stats)
 
     # death_entries isn't persisted on trending_articles_v2 (see
     # pipeline/models.py), so the obituary row is rebuilt by re-scraping --
     # cheap and deterministic, no LLM call involved.
-    year, month, day = (int(x) for x in target_date.split("-"))
+    year, month, day = (int(x) for x in trending_date.split("-"))
     for r in saved:
         title = r["normalized_title"] or r["title"]
         m = DEATHS_ARTICLE_RE.match(title or "")
@@ -75,8 +88,8 @@ def main() -> int:
         print("\nDRY_RUN set — not saving.")
         return 0
 
-    DailySummarySaver(supabase_client).save_rows(target_date, rows, PROMPT_VERSION)
-    print(f"\nSaved {len(rows)} row(s) to daily_trend_rows for {target_date}")
+    DailySummarySaver(supabase_client).save_rows(trending_date, rows, PROMPT_VERSION)
+    print(f"\nSaved {len(rows)} row(s) to daily_trend_rows for {trending_date}")
     return 0
 
 

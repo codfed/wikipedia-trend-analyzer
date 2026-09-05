@@ -8,6 +8,26 @@ import requests
 _WIKI_API = "https://en.wikipedia.org/w/api.php"
 _TIMEOUT = 5  # seconds
 
+DEATHS_ARTICLE_RE = re.compile(r"^Deaths[_ ]in[_ ](\d{4})$", re.IGNORECASE)
+
+
+def build_obituary_row(normalized_title: str, entries: list[str], stats: dict | None = None) -> dict:
+    """A daily_trend_rows row for a 'Deaths in YYYY' article's entries for one
+    date. Deterministic -- no LLM involved, this is a verbatim slice of
+    Wikipedia's own list. `stats` is the dict of TrendStats keyed by
+    normalized_title returned by pipeline.daily_stats.compute_daily_stats;
+    pass None if unavailable and streak_days/trajectory are left null."""
+    s = (stats or {}).get(normalized_title)
+    return {
+        "category": "ongoing_list",
+        "titles": [normalized_title],
+        "headline": normalized_title,
+        "summary": "\n".join(f"• {e}" for e in entries),
+        "image_url": None,
+        "streak_days": s.streak_days if s else None,
+        "trajectory": s.trajectory if s else None,
+    }
+
 
 def _make_session() -> requests.Session:
     email = os.environ.get("WIKIPEDIA_EMAIL", "")

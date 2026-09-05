@@ -1,16 +1,13 @@
 """Orchestrate the tiered search + LLM enrichment for a single article."""
 
 import calendar
-import re
 import time
-from pipeline.deaths_scraper import scrape_deaths_for_date
+from pipeline.deaths_scraper import scrape_deaths_for_date, DEATHS_ARTICLE_RE
 from pipeline.models import Article
 from search.tiered import TieredSearcher, SearchResult
 from llm.generator import ExplanationGenerator
 from llm.client import LLMClient
 from llm.prompts import PROMPT_VERSION
-
-_DEATHS_ARTICLE_RE = re.compile(r"^Deaths[_ ]in[_ ](\d{4})$", re.IGNORECASE)
 
 
 class ArticleEnricher:
@@ -32,7 +29,7 @@ class ArticleEnricher:
 
     def enrich(self, article: Article) -> Article:
         """Run tiered search and generate explanation. Returns mutated article."""
-        m = _DEATHS_ARTICLE_RE.match(article.title)
+        m = DEATHS_ARTICLE_RE.match(article.title)
         if m:
             return self._enrich_deaths_article(article, int(m.group(1)))
 

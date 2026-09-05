@@ -27,7 +27,8 @@ load_dotenv()
 from pipeline.fetcher import FeaturedFeedFetcher
 from pipeline.parser import FeaturedArticlesParser
 from pipeline.trending import calculate_trending_status
-from pipeline.enricher import ArticleEnricher, _DEATHS_ARTICLE_RE
+from pipeline.enricher import ArticleEnricher
+from pipeline.deaths_scraper import DEATHS_ARTICLE_RE, build_obituary_row
 from pipeline.models import Article
 
 from search.client import SerperClient
@@ -199,8 +200,8 @@ def main() -> int:
             # 3. Enrich — carry forward prior reason if available, else run pipeline
             # Rolling-list articles always re-scrape fresh — never carry forward
             always_fresh = bool(
-                _DEATHS_ARTICLE_RE.match(article.normalized_title or "")
-                or _DEATHS_ARTICLE_RE.match(article.title or "")
+                DEATHS_ARTICLE_RE.match(article.normalized_title or "")
+                or DEATHS_ARTICLE_RE.match(article.title or "")
             )
             prior = article_saver.fetch_prior_reason(article.title, article.date) if (article_saver and not always_fresh) else None
             prior_days_old = (
@@ -291,16 +292,7 @@ def main() -> int:
             for article in processed:
                 if not article.death_entries:
                     continue
-                s = stats.get(article.normalized_title)
-                rows.append({
-                    "category": "ongoing_list",
-                    "titles": [article.normalized_title],
-                    "headline": article.normalized_title,
-                    "summary": "\n".join(f"• {e}" for e in article.death_entries),
-                    "image_url": None,
-                    "streak_days": s.streak_days if s else None,
-                    "trajectory": s.trajectory if s else None,
-                })
+                rows.append(build_obituary_row(article.normalized_title, article.death_entries, stats))
 
             DailySummarySaver(supabase_client).save_rows(date_str, rows, PROMPT_VERSION)
             print(f"  Saved {len(rows)} daily trend row(s)")

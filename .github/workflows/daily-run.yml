@@ -14,6 +14,15 @@ on:
     - cron: "0 19 * * *"
     - cron: "0 1 * * *"
   workflow_dispatch:
+    inputs:
+      trending_date:
+        description: >-
+          Force-run one specific date (YYYY-MM-DD) instead of the automatic
+          pending-date sweep. This is the trending_date you want data for,
+          not the feed-fetch date -- the +1 day offset is handled for you.
+          Leave blank for normal behavior.
+        required: false
+        type: string
 
 jobs:
   analyze:
@@ -30,15 +39,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run analyzer for all pending dates
+      - name: Run analyzer
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          TRENDING_DATE: ${{ inputs.trending_date }}
         run: |
           set -o pipefail
-          python -m scripts.run_pending 2>&1 | tee run.log
+          if [ -n "$TRENDING_DATE" ]; then
+            FETCH_DATE=$(python3 -c "from datetime import date, timedelta; print((date.fromisoformat('$TRENDING_DATE') + timedelta(days=1)).isoformat())")
+            echo "Manual run for trending_date=$TRENDING_DATE (feed fetch date $FETCH_DATE)"
+            TARGET_DATE="$FETCH_DATE" python main.py 2>&1 | tee run.log
+          else
+            python -m scripts.run_pending 2>&1 | tee run.log
+          fi
 
       - name: Upload run log
         if: failure()

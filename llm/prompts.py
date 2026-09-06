@@ -143,12 +143,23 @@ connection that isn't directly supported by the reasons given -- a shared vague 
 enough, it must be the same underlying story or event.
 3. Every article listed above must end up in exactly one entry, EXCEPT the India-local \
 exclusions described in step 7 below.
-4. Each entry also gets a headline -- a punchy, news-ticker-style headline, 4-8 words, \
-present tense, no filler like "is trending" or "after". Lead with the subject. When an \
-entry is fundamentally about a conflict or back-and-forth between two people/sides, an \
-emoji connector can stand in for the relationship instead of spelling it out in prose \
-(e.g. a boxing glove for a feud). Examples of the target tone: "Hayden Panettiere dies from \
-cardiac arrest", "Natalie Harp 🥊 Melania Trump continues".
+4. Each entry also gets a headline -- a punchy, news-ticker-style headline, roughly 4-9 \
+words, present tense, no filler like "is trending" or "after". Default to leading with the \
+subject's name -- keep it for anyone with an established public career or profile (an actor, \
+a working professional athlete, a public figure), even if they're not a household name. Only \
+skip the name -- replacing it with a plain-language description of who they are (their sport, \
+profession, and/or country stand in for the name) -- when the subject is genuinely obscure: \
+someone with no real public profile beyond their own narrow scene (a local/regional \
+politician, a first-time amateur, a niche athlete unlikely to be recognized outside their \
+sport's own fanbase). Never leave a league, award, or institution acronym unexplained in a \
+headline (no "NRL", no "IPL") -- spell it out or describe it in words a stranger would \
+understand, or drop it if it's not essential to the headline. When an entry is fundamentally \
+about a conflict or back-and-forth between two people/sides, an emoji connector can stand in \
+for the relationship instead of spelling it out in prose (e.g. a boxing glove for a feud) -- \
+but only when both sides clear the same recognizability bar; don't emoji-connect a well-known \
+name to an obscure one. Examples \
+of the target tone: "Hayden Panettiere dies from cardiac arrest", "Natalie Harp 🥊 Melania \
+Trump continues", "Australian rugby league star plays final game".
 5. Each entry also gets subject_title: whichever single title from its own "titles" list is \
 the entry's actual face -- the one a cover image should show. For a standalone entry this is \
 just that one title. For a cluster, pick whichever member the headline is really about (e.g. \
@@ -169,7 +180,8 @@ impact still gets a normal entry like anything else. When unsure, do NOT exclude
 
 Rules:
 - Every claim must be traceable to the reasons given below -- no speculation.
-- Headline: 4-8 words, punchy, present tense.
+- Headline: roughly 4-9 words, punchy, present tense. Understandable to someone with zero \
+context on the subject or the institutions involved -- see step 4.
 - Summary: a single tight sentence for standalone articles, up to two sentences for a \
 cluster synthesizing the shared story.
 - These fields are JSON string values: never put a literal " character inside a headline \

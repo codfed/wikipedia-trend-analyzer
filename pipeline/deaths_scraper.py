@@ -24,6 +24,8 @@ def build_obituary_row(normalized_title: str, entries: list[str], stats: dict | 
         "headline": normalized_title,
         "summary": "\n".join(f"• {e}" for e in entries),
         "image_url": None,
+        "topic": "death",
+        "country": None,
         "streak_days": s.streak_days if s else None,
         "trajectory": s.trajectory if s else None,
     }

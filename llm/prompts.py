@@ -177,6 +177,30 @@ state-level Indian event -- with no significance outside India does NOT get an e
 list its title in excluded_india_local. Only exclude when the story is genuinely local: an \
 Indian story with major international coverage, a globally recognized figure, or cross-border \
 impact still gets a normal entry like anything else. When unsure, do NOT exclude it.
+8. Each entry also gets topic: the single MOST SPECIFIC applicable label from this list \
+(never a vaguer one when a precise one applies -- "tennis" not "sport_other", "movie" not \
+"entertainment"):
+- Sports: soccer, american_football, basketball, baseball, tennis, golf, boxing, mma, hockey, \
+cricket, rugby, skiing, swimming, athletics, cycling, motorsport, esports, sport_other (any \
+other specific sport not listed).
+- Entertainment media: movie, tv_show, book, video_game, music_rock, music_pop, \
+music_classical, music_hiphop, music_country, music_other.
+- People by role (use when the story is about their public career/role itself, not tied to a \
+specific work, sport, or crime): actor, comedian, tv_anchor, musician, author, politician, \
+business_executive, religious_figure, royal.
+- Crime & justice: crime_violent, crime_white_collar, legal_verdict (a trial outcome, \
+sentencing, or court ruling of any kind).
+- World & science: politics_world (geopolitics, elections, government, international \
+relations), science_tech, space, health_medicine.
+- Other: death (a standalone notable death or tribute -- use this instead of the person's \
+profession whenever the death itself is what's trending, not their career), religion_culture, \
+natural_disaster, weird (trending for unclear or bizarre reasons), other (nothing above fits).
+For a cluster, pick whichever label fits the shared story as a whole.
+9. Each entry also gets country: the ISO 3166-1 alpha-2 code (e.g. "US", "GB", "IN", "JP", \
+"AR") of the one country the story is genuinely centered on, or null if no single country is \
+central -- the story spans multiple countries equally, or nationality isn't meaningfully tied \
+to why it's trending. Only set this when it's genuinely informative, not just because someone \
+involved happens to hold that nationality incidentally.
 
 Rules:
 - Every claim must be traceable to the reasons given below -- no speculation.
@@ -190,4 +214,4 @@ instead.
 
 Respond with ONLY valid JSON and nothing else -- no explanation before or after, no \
 corrections, no markdown fences:
-{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "...", "subject_title": "...", "image_worthy": true}}], "excluded_india_local": ["..."]}}"""
+{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "...", "subject_title": "...", "image_worthy": true, "topic": "...", "country": "US"}}], "excluded_india_local": ["..."]}}"""

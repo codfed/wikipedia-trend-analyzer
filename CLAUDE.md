@@ -130,6 +130,24 @@ prior rows, not accumulate duplicates.
 | `ongoing_list` | A continuing rolling/reference page (`List of ...`, `Deaths in YYYY`) |
 | `ongoing_anomaly` | A continuing article on `BOT_TRAFFIC_TITLES` |
 
+Every row also gets `topic` and `country`, a separate content-classification
+pair for frontend iconography (distinct from `category` above, which
+describes the row's structural role in the digest, not what it's about).
+`topic` is the single most specific applicable label from a ~40-value
+controlled vocabulary (individual sports, media types, music genres, a
+person's public role, crime subtypes, etc.) -- the canonical list lives in
+`llm/daily_summary.py`'s `VALID_TOPICS` and must stay in sync with the
+grouped, human-readable copy in `DAILY_SUMMARY_PROMPT` (`llm/prompts.py`,
+step 8). A topic the model returns that isn't in `VALID_TOPICS` is replaced
+with `"other"` rather than trusted verbatim. `country` is an ISO 3166-1
+alpha-2 code (nullable) when the story is genuinely centered on one country,
+letting the frontend render a flag alongside the topic icon -- the two are
+independent (a story can be `tennis` + `ES` at once). The `Deaths in YYYY`
+obituary row (see above) gets `topic="death"`, `country=None` deterministically
+in `build_obituary_row`, not via the LLM. Rows built by the safety net (the
+model dropped a title by accident) get `topic="other"`, `country=None` since
+there's no model classification available for them.
+
 ### 6. Eval-First Design
 Evals run automatically after every pipeline run.  Two fields are evaluated:
 - `trending_reason` — faithfulness + format (LLM judge + deterministic checks)
@@ -227,6 +245,8 @@ create table daily_trend_rows (
   headline text not null,
   summary text not null,
   image_url text,
+  topic text,
+  country text,
   streak_days int,
   trajectory text,
   prompt_version text,

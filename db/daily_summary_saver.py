@@ -13,6 +13,8 @@ class DailySummarySaver:
         headline       text
         summary        text
         image_url      text
+        topic          text
+        country        text  -- ISO 3166-1 alpha-2, nullable
         streak_days    int
         trajectory     text
         prompt_version text
@@ -42,6 +44,8 @@ class DailySummarySaver:
                     "headline": row["headline"],
                     "summary": row["summary"],
                     "image_url": row.get("image_url"),
+                    "topic": row.get("topic"),
+                    "country": row.get("country"),
                     "streak_days": row.get("streak_days"),
                     "trajectory": row.get("trajectory"),
                     "prompt_version": prompt_version,

@@ -49,7 +49,10 @@ def main() -> int:
 
     saved = (
         db.table(ARTICLE_TABLE)
-        .select("normalized_title,title,thumbnail,trending_reason,trending_reason_short")
+        .select(
+            "normalized_title,title,thumbnail,trending_reason,trending_reason_short,"
+            "topic,country,is_mystery"
+        )
         .eq("trending_date", trending_date)
         .execute()
     ).data

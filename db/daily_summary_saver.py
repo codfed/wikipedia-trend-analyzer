@@ -15,6 +15,7 @@ class DailySummarySaver:
         image_url      text
         topic          text
         country        text  -- ISO 3166-1 alpha-2, nullable
+        is_mystery     boolean default false
         streak_days    int
         trajectory     text
         prompt_version text
@@ -46,6 +47,7 @@ class DailySummarySaver:
                     "image_url": row.get("image_url"),
                     "topic": row.get("topic"),
                     "country": row.get("country"),
+                    "is_mystery": row.get("is_mystery", False),
                     "streak_days": row.get("streak_days"),
                     "trajectory": row.get("trajectory"),
                     "prompt_version": prompt_version,

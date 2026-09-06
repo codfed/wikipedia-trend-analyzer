@@ -45,6 +45,7 @@ from llm.prompts import (
 )
 from llm.relevance import is_relevant
 from llm.generator import ExplanationGenerator
+from llm.topics import clean_topic, clean_country
 
 from db.client import SupabaseClient
 from db.saver import ArticleSaver
@@ -79,18 +80,26 @@ def _title_match(needle: str, article: Article) -> bool:
     return False
 
 
-def _generate_summary(article: Article, llm_client: LLMClient) -> Article:
-    """Always-run LLM call to produce article.summary."""
+def _generate_summary_and_classify(article: Article, llm_client: LLMClient) -> Article:
+    """Always-run LLM call: produces article.summary plus content
+    classification (topic/country). Bundled into one call since it already
+    runs unconditionally for every article regardless of is_mystery status --
+    classification rides along for free rather than needing its own call,
+    and works for mystery articles since it only needs title+extract, not
+    why the article is trending."""
     prompt = SUMMARY_PROMPT.format(
         title=article.normalized_title,
         extract=article.extract[:1500],
     )
-    article.summary = llm_client.generate(
+    data = llm_client.generate_json(
         prompt=prompt,
         model=SUMMARY_MODEL,
         temperature=SUMMARY_TEMPERATURE,
         max_tokens=SUMMARY_MAX_TOKENS,
     )
+    article.summary = data.get("summary", "")
+    article.topic = clean_topic(data.get("topic"))
+    article.country = clean_country(data.get("country"))
     return article
 
 
@@ -192,10 +201,11 @@ def main() -> int:
                 f"is_newly_trending={article.is_newly_trending}"
             )
 
-            # 2. Summary (always)
+            # 2. Summary + content classification (always)
             t0 = time.perf_counter()
-            article = _generate_summary(article, llm_client)
+            article = _generate_summary_and_classify(article, llm_client)
             print(f"  summary ({time.perf_counter() - t0:.2f}s): {article.summary}")
+            print(f"  topic={article.topic}, country={article.country}")
 
             # 3. Enrich — carry forward prior reason if available, else run pipeline
             # Rolling-list articles always re-scrape fresh — never carry forward

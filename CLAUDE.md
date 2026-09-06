@@ -93,21 +93,24 @@ this (Google is also genuinely newsworthy most days), so it's curated by
 hand as new offenders are spotted.
 
 `DailySummaryGenerator` makes one LLM call per date to produce structured
-rows, not narrative prose. It asks the model to judge two things: whether
+rows, not narrative prose. It asks the model to judge three things: whether
 two or more *new* articles share the same real-world story and should be
-merged into a `new_cluster` row, and whether a new article is a purely
+merged into a `new_cluster` row; whether a new article is a purely
 domestic Indian story (a state/local Indian politician, a regional
 Bollywood release, a local Indian court case, a state-level Indian event)
 with no significance outside India -- those get excluded from the digest
 entirely rather than a row (`excluded_india_local` in the model's
-response). An Indian story with real international coverage, a globally
-recognized figure, or cross-border impact is unaffected and gets a normal
-entry like anything else. Everything else -- whether a continuing article
-is a rolling reference page (`List of ...`, `Deaths in YYYY`) vs. a real
-story, and whether a title is bot-traffic -- is decided deterministically
-in Python before the prompt is built, and a continuing article's title is
-filtered out of any `new_rows` cluster it might have been merged into (a
-defense against the model rendering the exact same trend twice).
+response), while an Indian story with real international coverage, a
+globally recognized figure, or cross-border impact gets a normal entry
+like anything else; and whether an entry's story is fundamentally about
+someone dying today (`is_death`), which overrides that row's `topic` (see
+below) regardless of the person's profession. Everything else -- whether a
+continuing article is a rolling reference page (`List of ...`, `Deaths in
+YYYY`) vs. a real story, and whether a title is bot-traffic -- is decided
+deterministically in Python before the prompt is built, and a continuing
+article's title is filtered out of any `new_rows` cluster it might have
+been merged into (a defense against the model rendering the exact same
+trend twice).
 
 The one continuing-article row that *is* built today is the obituary row for
 `Deaths in YYYY`: `pipeline/enricher.py`'s `_enrich_deaths_article` already
@@ -130,23 +133,39 @@ prior rows, not accumulate duplicates.
 | `ongoing_list` | A continuing rolling/reference page (`List of ...`, `Deaths in YYYY`) |
 | `ongoing_anomaly` | A continuing article on `BOT_TRAFFIC_TITLES` |
 
-Every row also gets `topic` and `country`, a separate content-classification
-pair for frontend iconography (distinct from `category` above, which
-describes the row's structural role in the digest, not what it's about).
-`topic` is the single most specific applicable label from a ~40-value
-controlled vocabulary (individual sports, media types, music genres, a
-person's public role, crime subtypes, etc.) -- the canonical list lives in
-`llm/daily_summary.py`'s `VALID_TOPICS` and must stay in sync with the
-grouped, human-readable copy in `DAILY_SUMMARY_PROMPT` (`llm/prompts.py`,
-step 8). A topic the model returns that isn't in `VALID_TOPICS` is replaced
-with `"other"` rather than trusted verbatim. `country` is an ISO 3166-1
-alpha-2 code (nullable) when the story is genuinely centered on one country,
-letting the frontend render a flag alongside the topic icon -- the two are
-independent (a story can be `tennis` + `ES` at once). The `Deaths in YYYY`
-obituary row (see above) gets `topic="death"`, `country=None` deterministically
-in `build_obituary_row`, not via the LLM. Rows built by the safety net (the
-model dropped a title by accident) get `topic="other"`, `country=None` since
-there's no model classification available for them.
+Every row also gets `topic`, `country`, and `is_mystery` -- a separate
+content-classification triple for frontend iconography (distinct from
+`category` above, which describes the row's structural role in the digest,
+not what it's about). These are classified **per article**, not per digest
+row: `main.py`'s always-run summary step (`_generate_summary_and_classify`)
+bundles classification into the same Haiku call that already produces
+`article.summary` for *every* processed article, so it's free (no extra
+LLM call) and works even for `is_mystery` articles, since it only needs the
+article's own title+extract, never why it's trending. `topic` is the single
+most specific applicable label from a ~40-value controlled vocabulary
+(individual sports, media types, music genres, a person's public role,
+crime subtypes, etc.) -- the canonical list lives in `llm/topics.py`'s
+`VALID_TOPICS` and must stay in sync with the grouped, human-readable copy
+in `SUMMARY_PROMPT` (`llm/prompts.py`). A topic the model returns that
+isn't in `VALID_TOPICS` is replaced with `"other"` rather than trusted
+verbatim. `country` is an ISO 3166-1 alpha-2 code (nullable) when the
+subject is genuinely centered on one country, letting the frontend render a
+flag alongside the topic icon -- the two are independent (a story can be
+`tennis` + `ES` at once).
+
+A digest row's `topic`/`country`/`is_mystery` are just copied from its
+`subject_title` article (`llm/daily_summary.py`), not re-judged -- with one
+exception: article-level classification can never know "this person died
+today" from title+extract alone (their Wikipedia bio reads the same
+whether they're alive or not), so `DailySummaryGenerator` still asks the
+digest LLM call for one narrow boolean, `is_death`, and overrides the
+row's `topic` to `"death"` when true, regardless of the subject's
+profession. The `Deaths in YYYY` obituary row (see above) gets
+`topic="death"`, `country=None`, `is_mystery=False` deterministically in
+`build_obituary_row`, not via any LLM. Rows built by the safety net (the
+model dropped a title by accident) still pull `topic`/`country`/`is_mystery`
+from the article's own classification, since that's independent of the
+digest LLM call succeeding.
 
 ### 6. Eval-First Design
 Evals run automatically after every pipeline run.  Two fields are evaluated:
@@ -169,6 +188,7 @@ Results are printed to stdout and optionally persisted to `eval_results`.
 | `evals/runner.py` | Run all checks; log to Supabase |
 | `db/saver.py` | Upsert to `trending_articles_v2` + `eval_results` |
 | `pipeline/daily_stats.py` | Streak length + view-delta trajectory + bot-traffic classification, no LLM |
+| `llm/topics.py` | Shared topic/country taxonomy + validators |
 | `llm/daily_summary.py` | One LLM call/date; produces structured `daily_trend_rows` |
 | `db/daily_summary_saver.py` | Delete-then-insert `daily_trend_rows` per date |
 
@@ -191,6 +211,8 @@ create table trending_articles_v2 (
   is_newly_trending bool,
   view_delta_percentage int,
   summary text,
+  topic text,
+  country text,
   trending_reason text,
   trending_reason_short text,
   trending_reason_source text,
@@ -247,6 +269,7 @@ create table daily_trend_rows (
   image_url text,
   topic text,
   country text,
+  is_mystery boolean default false,
   streak_days int,
   trajectory text,
   prompt_version text,

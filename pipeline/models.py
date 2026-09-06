@@ -27,6 +27,13 @@ class Article:
     # LLM-generated description (always runs)
     summary: str = ""
 
+    # Content classification -- what the article is ABOUT, not why it's
+    # trending. Classified from title+extract alone (bundled into the same
+    # always-run call that produces `summary`), so it's available even for
+    # is_mystery articles where we never learn why they're trending.
+    topic: str = "other"
+    country: Optional[str] = None
+
     # Unified explanation fields (replaces news_relation / search_relation / *_short)
     trending_reason: str = ""
     trending_reason_short: str = ""

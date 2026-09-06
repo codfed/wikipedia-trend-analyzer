@@ -88,6 +88,8 @@ class ArticleSaver:
             "is_newly_trending": article.is_newly_trending,
             "view_delta_percentage": article.view_delta_percentage,
             "summary": article.summary,
+            "topic": article.topic,
+            "country": article.country,
             "trending_reason": article.trending_reason,
             "trending_reason_short": article.trending_reason_short,
             "trending_reason_source": article.trending_reason_source,

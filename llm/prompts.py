@@ -2,24 +2,53 @@
 
 # Increment this whenever a prompt changes.  Saved articles and eval results
 # include this version so quality changes can be tracked over time.
-PROMPT_VERSION = "v2.5"
+PROMPT_VERSION = "v2.6"
 
 # ---------------------------------------------------------------------------
-# Summary (always runs, Haiku)
+# Summary + content classification (always runs, Haiku, structured JSON)
+#
+# Bundled into one call: this already runs unconditionally for every
+# article regardless of is_mystery status, so classification rides along
+# for free instead of needing its own call (and works for mystery articles,
+# since it only needs the article's own title+extract, not why it's
+# trending). See llm/topics.py for the enforcement copy of this taxonomy.
 # ---------------------------------------------------------------------------
 SUMMARY_MODEL = "claude-haiku-4-5-20251001"
 SUMMARY_TEMPERATURE = 0.3
-SUMMARY_MAX_TOKENS = 128
-SUMMARY_PROMPT = """Given the Wikipedia extract below, write a short description \
-that does NOT mention or reference the article's title.
+SUMMARY_MAX_TOKENS = 300
+SUMMARY_PROMPT = """Given the Wikipedia extract below, produce two things about this \
+article's SUBJECT. You only have the extract -- not why the article is trending -- so base \
+both purely on what the subject IS, not on any trending context.
 
-Rules:
-- Focus on describing the subject's content or significance.
-- Include enough context to be useful (e.g. country, medium, field).
-- Length: 8–15 words (shorter is better).
+1. summary: a short description that does NOT mention or reference the article's title. \
+Focus on describing the subject's content or significance. Include enough context to be \
+useful (e.g. country, medium, field). Length: 8-15 words (shorter is better).
+2. topic: the single MOST SPECIFIC applicable label from this list (never a vaguer one when \
+a precise one applies -- "tennis" not "sport_other", "movie" not "entertainment"):
+- Sports: soccer, american_football, basketball, baseball, tennis, golf, boxing, mma, hockey, \
+cricket, rugby, skiing, swimming, athletics, cycling, motorsport, esports, sport_other (any \
+other specific sport not listed).
+- Entertainment media: movie, tv_show, book, video_game, music_rock, music_pop, \
+music_classical, music_hiphop, music_country, music_other.
+- People by role (use when the subject IS a person and none of the media/sport labels apply \
+to their claim to fame): actor, comedian, tv_anchor, musician, author, politician, \
+business_executive, religious_figure, royal.
+- Crime & justice: crime_violent, crime_white_collar, legal_verdict (a trial outcome, \
+sentencing, or court ruling of any kind).
+- World & science: politics_world (geopolitics, elections, government, international \
+relations), science_tech, space, health_medicine.
+- Other: death (use ONLY if the article itself is a "Deaths in YYYY"-style rolling list, not \
+for a person who happens to have died), religion_culture, natural_disaster, weird (the \
+subject itself is bizarre or defies easy categorization), other (nothing above fits).
+3. country: the ISO 3166-1 alpha-2 code (e.g. "US", "GB", "IN", "JP", "AR") of the one \
+country this subject is genuinely centered on, or null if no single country is central to \
+what it IS (a global topic, a person without one defining nationality tie, etc).
 
 Title: {title}
-Extract: {extract}"""
+Extract: {extract}
+
+Respond with ONLY valid JSON and nothing else -- no explanation before or after, no markdown \
+fences: {{"summary": "...", "topic": "...", "country": "US"}}"""
 
 # ---------------------------------------------------------------------------
 # Relevance gate (Haiku, structured JSON output)
@@ -177,30 +206,11 @@ state-level Indian event -- with no significance outside India does NOT get an e
 list its title in excluded_india_local. Only exclude when the story is genuinely local: an \
 Indian story with major international coverage, a globally recognized figure, or cross-border \
 impact still gets a normal entry like anything else. When unsure, do NOT exclude it.
-8. Each entry also gets topic: the single MOST SPECIFIC applicable label from this list \
-(never a vaguer one when a precise one applies -- "tennis" not "sport_other", "movie" not \
-"entertainment"):
-- Sports: soccer, american_football, basketball, baseball, tennis, golf, boxing, mma, hockey, \
-cricket, rugby, skiing, swimming, athletics, cycling, motorsport, esports, sport_other (any \
-other specific sport not listed).
-- Entertainment media: movie, tv_show, book, video_game, music_rock, music_pop, \
-music_classical, music_hiphop, music_country, music_other.
-- People by role (use when the story is about their public career/role itself, not tied to a \
-specific work, sport, or crime): actor, comedian, tv_anchor, musician, author, politician, \
-business_executive, religious_figure, royal.
-- Crime & justice: crime_violent, crime_white_collar, legal_verdict (a trial outcome, \
-sentencing, or court ruling of any kind).
-- World & science: politics_world (geopolitics, elections, government, international \
-relations), science_tech, space, health_medicine.
-- Other: death (a standalone notable death or tribute -- use this instead of the person's \
-profession whenever the death itself is what's trending, not their career), religion_culture, \
-natural_disaster, weird (trending for unclear or bizarre reasons), other (nothing above fits).
-For a cluster, pick whichever label fits the shared story as a whole.
-9. Each entry also gets country: the ISO 3166-1 alpha-2 code (e.g. "US", "GB", "IN", "JP", \
-"AR") of the one country the story is genuinely centered on, or null if no single country is \
-central -- the story spans multiple countries equally, or nationality isn't meaningfully tied \
-to why it's trending. Only set this when it's genuinely informative, not just because someone \
-involved happens to hold that nationality incidentally.
+8. Each entry also gets is_death (true/false): true if the entry is fundamentally about \
+someone dying today -- a death, a memorial, an anniversary of a death -- regardless of their \
+profession; false otherwise (including when a death is mentioned only in passing and isn't \
+the entry's actual subject). This overrides the subject's usual topic classification with a \
+death icon downstream, so only set it true when the death itself is what's trending.
 
 Rules:
 - Every claim must be traceable to the reasons given below -- no speculation.
@@ -214,4 +224,4 @@ instead.
 
 Respond with ONLY valid JSON and nothing else -- no explanation before or after, no \
 corrections, no markdown fences:
-{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "...", "subject_title": "...", "image_worthy": true, "topic": "...", "country": "US"}}], "excluded_india_local": ["..."]}}"""
+{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "...", "subject_title": "...", "image_worthy": true, "is_death": false}}], "excluded_india_local": ["..."]}}"""

@@ -36,7 +36,9 @@ class DailySummaryGenerator:
         `articles` is a list of dicts with at least `normalized_title`,
         `thumbnail`, and `trending_reason` (or `trending_reason_short`)
         keys. Continuing articles and BOT_TRAFFIC_TITLES are dropped
-        entirely -- no rows yet.
+        entirely -- no rows yet. Purely domestic Indian stories with no
+        worldwide significance are also dropped (model judgment, see
+        DAILY_SUMMARY_PROMPT step 7).
         """
         new_block_lines = []
         eligible_titles: set[str] = set()
@@ -74,6 +76,15 @@ class DailySummaryGenerator:
         rows: list[dict] = []
         claimed: set[str] = set()
 
+        # Titles the model judged as purely domestic Indian stories with no
+        # worldwide significance (see DAILY_SUMMARY_PROMPT step 7). Claimed
+        # up front, before any row is built, so they can't slip into a row
+        # (model error) and so the safety-net pass below -- which exists to
+        # catch titles the model drops *unintentionally* -- doesn't undo an
+        # intentional exclusion by treating it as an accident.
+        excluded_india_local = set(data.get("excluded_india_local") or []) & eligible_titles
+        claimed.update(excluded_india_local)
+
         for row in data.get("rows", []):
             # Defensive filter: only titles we actually sent qualify, and
             # each title can only be claimed by the first row that names it.
@@ -104,10 +115,12 @@ class DailySummaryGenerator:
                 "trajectory": None,
             })
 
-        # Safety net: the model can drop a title on the floor entirely --
-        # never let an article vanish from the digest. Fall back to its own
-        # reason text as the blurb and the raw title as the headline. No
-        # image -- there's no model judgment on novelty for these.
+        # Safety net: the model can drop a title on the floor by accident --
+        # never let an article vanish from the digest that way. Deliberate
+        # exclusions (excluded_india_local, above) are already in `claimed`
+        # so they don't land here. Fall back to its own reason text as the
+        # blurb and the raw title as the headline. No image -- there's no
+        # model judgment on novelty for these.
         for title in sorted(eligible_titles - claimed):
             rows.append({
                 "category": CATEGORY_NEW,

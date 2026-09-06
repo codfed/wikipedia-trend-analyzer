@@ -141,7 +141,8 @@ a single cluster entry instead of separate ones. A cluster gets ONE blurb that s
 why the story matters as a whole (not each article's blurb stacked together). Don't force a \
 connection that isn't directly supported by the reasons given -- a shared vague theme is not \
 enough, it must be the same underlying story or event.
-3. Every article listed above must end up in exactly one entry.
+3. Every article listed above must end up in exactly one entry, EXCEPT the India-local \
+exclusions described in step 7 below.
 4. Each entry also gets a headline -- a punchy, news-ticker-style headline, 4-8 words, \
 present tense, no filler like "is trending" or "after". Lead with the subject. When an \
 entry is fundamentally about a conflict or back-and-forth between two people/sides, an \
@@ -159,6 +160,12 @@ bizarre, or something that came out of nowhere. Most routine news (a transfer, a
 trailer drop, an index change) should be false. Err toward false -- this should flag a \
 minority of standalone entries, not most of them. For cluster entries this field is ignored, \
 set it true.
+7. An article that's a purely domestic Indian story -- an Indian state/local politician, a \
+regional Bollywood or regional-language release, a local Indian court case or crime story, a \
+state-level Indian event -- with no significance outside India does NOT get an entry. Instead, \
+list its title in excluded_india_local. Only exclude when the story is genuinely local: an \
+Indian story with major international coverage, a globally recognized figure, or cross-border \
+impact still gets a normal entry like anything else. When unsure, do NOT exclude it.
 
 Rules:
 - Every claim must be traceable to the reasons given below -- no speculation.
@@ -171,4 +178,4 @@ instead.
 
 Respond with ONLY valid JSON and nothing else -- no explanation before or after, no \
 corrections, no markdown fences:
-{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "...", "subject_title": "...", "image_worthy": true}}]}}"""
+{{"rows": [{{"titles": ["..."], "headline": "...", "summary": "...", "subject_title": "...", "image_worthy": true}}], "excluded_india_local": ["..."]}}"""

@@ -93,15 +93,21 @@ this (Google is also genuinely newsworthy most days), so it's curated by
 hand as new offenders are spotted.
 
 `DailySummaryGenerator` makes one LLM call per date to produce structured
-rows, not narrative prose. It only asks the model to judge one thing:
-whether two or more *new* articles share the same real-world story and
-should be merged into a `new_cluster` row. Everything else -- whether a
-continuing article is a rolling reference page (`List of ...`, `Deaths in
-YYYY`) vs. a real story, and whether a title is bot-traffic -- is decided
-deterministically in Python before the prompt is built, and a continuing
-article's title is filtered out of any `new_rows` cluster it might have
-been merged into (a defense against the model rendering the exact same
-trend twice).
+rows, not narrative prose. It asks the model to judge two things: whether
+two or more *new* articles share the same real-world story and should be
+merged into a `new_cluster` row, and whether a new article is a purely
+domestic Indian story (a state/local Indian politician, a regional
+Bollywood release, a local Indian court case, a state-level Indian event)
+with no significance outside India -- those get excluded from the digest
+entirely rather than a row (`excluded_india_local` in the model's
+response). An Indian story with real international coverage, a globally
+recognized figure, or cross-border impact is unaffected and gets a normal
+entry like anything else. Everything else -- whether a continuing article
+is a rolling reference page (`List of ...`, `Deaths in YYYY`) vs. a real
+story, and whether a title is bot-traffic -- is decided deterministically
+in Python before the prompt is built, and a continuing article's title is
+filtered out of any `new_rows` cluster it might have been merged into (a
+defense against the model rendering the exact same trend twice).
 
 The one continuing-article row that *is* built today is the obituary row for
 `Deaths in YYYY`: `pipeline/enricher.py`'s `_enrich_deaths_article` already

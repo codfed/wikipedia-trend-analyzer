@@ -44,6 +44,8 @@ subject itself is bizarre or defies easy categorization), other (nothing above f
 country this subject is genuinely centered on, or null if no single country is central to \
 what it IS (a global topic, a person without one defining nationality tie, etc).
 
+Never use an em dash (—) in the summary; rephrase with a comma or separate sentence instead.
+
 Title: {title}
 Extract: {extract}
 
@@ -97,6 +99,7 @@ uses that uncertainty explicitly.
 - Light tone or whimsy is fine only if it adds no new factual claims and does not wander.
 - Do NOT start with "Here is the reason why…" or "The article is trending because…"
 - Avoid "spotlight" and "widespread".
+- Never use an em dash (—); rephrase with a period, comma, or separate sentence instead.
 {few_shot_block}
 Search results ({source_type}):
 {results}
@@ -141,6 +144,7 @@ Rules:
 - Be concise — one tight sentence, as short as the content allows.
 - Use only facts explicitly stated in the trending reason.
 - Only include dates if they appear verbatim in the trending reason.
+- Never use an em dash (—); rephrase with a comma or separate sentence instead.
 
 Article summary:
 {summary}
@@ -221,6 +225,8 @@ cluster synthesizing the shared story.
 - These fields are JSON string values: never put a literal " character inside a headline \
 or summary, even to quote someone -- use single quotes ('like this') for any quoted phrase \
 instead.
+- Never use an em dash (—) in a headline or summary; rephrase with a period, comma, or \
+separate sentence instead.
 
 Respond with ONLY valid JSON and nothing else -- no explanation before or after, no \
 corrections, no markdown fences:

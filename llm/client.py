@@ -1,9 +1,20 @@
 """Thin Anthropic API wrapper."""
 import json
 import os
+import re
 from typing import Any, Optional
 
 from anthropic import Anthropic
+
+# Claude models default to em dashes in prose regardless of prompt wording.
+# Stripped centrally here -- the one choke point every generated string
+# (plain text or a JSON field parsed from it) passes through -- rather than
+# relying on each prompt to ask nicely and risk missing a call site.
+_EM_DASH_RE = re.compile(r"\s*—\s*")
+
+
+def _strip_em_dashes(text: str) -> str:
+    return _EM_DASH_RE.sub(" - ", text)
 
 
 class LLMClient:
@@ -33,7 +44,8 @@ class LLMClient:
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text
-        return text.strip() if text else ""
+        text = text.strip() if text else ""
+        return _strip_em_dashes(text)
 
     def generate_json(
         self,

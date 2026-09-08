@@ -22,7 +22,10 @@ both purely on what the subject IS, not on any trending context.
 
 1. summary: a short description that does NOT mention or reference the article's title. \
 Focus on describing the subject's content or significance. Include enough context to be \
-useful (e.g. country, medium, field). Length: 8-15 words (shorter is better).
+useful (e.g. country, medium, field). Length: 8-15 words (shorter is better). If the subject \
+is a recurring calendar holiday (see topic=holiday below), focus purely on what it honors, \
+celebrates, or commemorates -- do NOT state which day/month/week it falls on, since that's \
+computed separately downstream and restating it here would be redundant.
 2. topic: the single MOST SPECIFIC applicable label from this list (never a vaguer one when \
 a precise one applies -- "tennis" not "sport_other", "movie" not "entertainment"):
 - Sports: soccer, american_football, basketball, baseball, tennis, golf, boxing, mma, hockey, \

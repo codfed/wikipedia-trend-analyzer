@@ -2,7 +2,9 @@
 
 import calendar
 import time
+from datetime import datetime
 from pipeline.deaths_scraper import scrape_deaths_for_date, DEATHS_ARTICLE_RE
+from pipeline.holiday_dates import describe_holiday_date
 from pipeline.models import Article
 from search.tiered import TieredSearcher, SearchResult
 from llm.generator import ExplanationGenerator
@@ -121,17 +123,35 @@ class ArticleEnricher:
         """Special-case handler for recurring calendar holidays (HOLIDAY_TITLES):
         skip search entirely -- there's rarely a real news story behind why a
         holiday trends, it's just the date itself, so search has nothing
-        reliable to find."""
+        reliable to find. For holidays with a known Nth-weekday-of-month
+        schedule rule (describe_holiday_date), state the rule and whether
+        this year's occurrence is the earliest/latest possible or in between --
+        for the rest (fixed-date, lunar/lunisolar), fall back to a simpler,
+        schedule-free reason rather than guessing."""
         title = article.normalized_title or article.title
-        article.trending_reason = (
-            f"{title} is trending because today is the holiday itself. "
-            f"Recurring calendar observances like this reliably drive a spike "
-            f"in Wikipedia traffic on their date every year."
-        )
-        article.trending_reason_short = (
-            f"{title} is trending because today is the holiday, a recurring "
-            f"calendar observance that predictably spikes Wikipedia traffic each year."
-        )
+        target_date = datetime.strptime(article.date, "%Y-%m-%d").date()
+        info = describe_holiday_date(title, target_date)
+
+        if info:
+            article.trending_reason = (
+                f"{title} falls on {info['rule_phrase']} each year. This year, "
+                f"that landed on {info['date_phrase']}, {info['extremity_phrase']}."
+            )
+            article.trending_reason_short = (
+                f"{title} fell on {info['date_phrase']} this year, "
+                f"{info['extremity_phrase']} for {info['rule_phrase']}."
+            )
+        else:
+            article.trending_reason = (
+                f"{title} is trending because today is the holiday itself. "
+                f"Recurring calendar observances like this reliably drive a spike "
+                f"in Wikipedia traffic on their date every year."
+            )
+            article.trending_reason_short = (
+                f"{title} is trending because today is the holiday, a recurring "
+                f"calendar observance that predictably spikes Wikipedia traffic each year."
+            )
+
         article.trending_reason_source = "holiday"
         article.raw_search_results = ""
         article.search_query_used = ""

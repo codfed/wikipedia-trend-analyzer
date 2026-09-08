@@ -43,7 +43,10 @@ class DailySummaryGenerator:
         Continuing articles and BOT_TRAFFIC_TITLES are dropped entirely --
         no rows yet. Purely domestic Indian stories with no worldwide
         significance are also dropped (model judgment, see
-        DAILY_SUMMARY_PROMPT step 7).
+        DAILY_SUMMARY_PROMPT step 7). Holidays (trending_reason_source ==
+        "holiday") are dropped too -- they get their own deterministic
+        category="holiday" row built by pipeline.holiday_dates.build_holiday_row
+        instead of going through this LLM call at all.
         """
         new_block_lines = []
         eligible_titles: set[str] = set()
@@ -56,7 +59,12 @@ class DailySummaryGenerator:
         for article in articles:
             title = article["normalized_title"]
             s = stats.get(title)
-            if s is None or not s.is_new or s.category == CATEGORY_BOT_TRAFFIC:
+            if (
+                s is None
+                or not s.is_new
+                or s.category == CATEGORY_BOT_TRAFFIC
+                or article.get("trending_reason_source") == "holiday"
+            ):
                 continue
 
             reason = (

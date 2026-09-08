@@ -34,6 +34,7 @@ from llm.daily_summary import DailySummaryGenerator
 from llm.prompts import PROMPT_VERSION
 from pipeline.daily_stats import compute_daily_stats
 from pipeline.deaths_scraper import DEATHS_ARTICLE_RE, build_obituary_row, scrape_deaths_for_date
+from pipeline.holiday_dates import build_holiday_row
 
 ARTICLE_TABLE = "trending_articles_v2"
 
@@ -51,7 +52,7 @@ def main() -> int:
         db.table(ARTICLE_TABLE)
         .select(
             "normalized_title,title,thumbnail,trending_reason,trending_reason_short,"
-            "topic,country,is_mystery"
+            "trending_reason_source,summary,topic,country,is_mystery"
         )
         .eq("trending_date", trending_date)
         .execute()
@@ -82,6 +83,17 @@ def main() -> int:
         entries, _ = scrape_deaths_for_date(int(m.group(1)), month, day)
         if entries:
             rows.append(build_obituary_row(title, entries, stats))
+
+    # Holiday rows: same data already saved on trending_articles_v2 (no
+    # re-scraping needed, unlike obituaries), just rebuild the row.
+    for r in saved:
+        if r.get("trending_reason_source") != "holiday":
+            continue
+        title = r["normalized_title"] or r["title"]
+        rows.append(build_holiday_row(
+            title, trending_date, r.get("summary") or "",
+            country=r.get("country"), image_url=r.get("thumbnail"),
+        ))
 
     print(f"\nGenerated {len(rows)} row(s):")
     for row in rows:

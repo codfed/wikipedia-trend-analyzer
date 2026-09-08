@@ -27,8 +27,9 @@ load_dotenv()
 from pipeline.fetcher import FeaturedFeedFetcher
 from pipeline.parser import FeaturedArticlesParser
 from pipeline.trending import calculate_trending_status
-from pipeline.enricher import ArticleEnricher
+from pipeline.enricher import ArticleEnricher, HOLIDAY_TITLES
 from pipeline.deaths_scraper import DEATHS_ARTICLE_RE, build_obituary_row
+from pipeline.holiday_dates import build_holiday_row
 from pipeline.models import Article
 
 from search.client import SerperClient
@@ -208,10 +209,13 @@ def main() -> int:
             print(f"  topic={article.topic}, country={article.country}")
 
             # 3. Enrich — carry forward prior reason if available, else run pipeline
-            # Rolling-list articles always re-scrape fresh — never carry forward
+            # Rolling-list and holiday articles always re-enrich fresh — never
+            # carry forward (a holiday's date-math fact is only valid for today)
             always_fresh = bool(
                 DEATHS_ARTICLE_RE.match(article.normalized_title or "")
                 or DEATHS_ARTICLE_RE.match(article.title or "")
+                or article.normalized_title in HOLIDAY_TITLES
+                or article.title in HOLIDAY_TITLES
             )
             prior = article_saver.fetch_prior_reason(article.title, article.date) if (article_saver and not always_fresh) else None
             prior_days_old = (
@@ -303,6 +307,18 @@ def main() -> int:
                 if not article.death_entries:
                     continue
                 rows.append(build_obituary_row(article.normalized_title, article.death_entries, stats))
+
+            # Holiday row: deterministic, not LLM-generated for the schedule
+            # fact -- reuses the article's own already-generated summary for
+            # the purpose/meaning component. Built here rather than routed
+            # through DailySummaryGenerator, which excludes holidays entirely.
+            for article in processed:
+                if article.trending_reason_source != "holiday":
+                    continue
+                rows.append(build_holiday_row(
+                    article.normalized_title, article.date, article.summary,
+                    country=article.country, image_url=article.thumbnail,
+                ))
 
             DailySummarySaver(supabase_client).save_rows(date_str, rows, PROMPT_VERSION)
             print(f"  Saved {len(rows)} daily trend row(s)")

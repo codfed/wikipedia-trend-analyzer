@@ -8,7 +8,7 @@ class DailySummarySaver:
     """Schema (daily_trend_rows):
         id             uuid, primary key
         trending_date  date
-        category       text  -- 'new' | 'new_cluster' | 'ongoing_trend' | 'ongoing_list' | 'ongoing_anomaly'
+        category       text  -- 'new' | 'new_cluster' | 'ongoing_trend' | 'ongoing_list' | 'ongoing_anomaly' | 'holiday'
         titles         text[]
         headline       text
         summary        text

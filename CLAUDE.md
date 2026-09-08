@@ -124,7 +124,9 @@ YYYY`) vs. a real story, and whether a title is bot-traffic -- is decided
 deterministically in Python before the prompt is built, and a continuing
 article's title is filtered out of any `new_rows` cluster it might have
 been merged into (a defense against the model rendering the exact same
-trend twice).
+trend twice). Holidays (`trending_reason_source == "holiday"`, see Tiered
+Search above) are also excluded from this LLM call entirely -- they get
+their own deterministic row (below), not a model-judged one.
 
 The one continuing-article row that *is* built today is the obituary row for
 `Deaths in YYYY`: `pipeline/enricher.py`'s `_enrich_deaths_article` already
@@ -133,6 +135,19 @@ on `Article.death_entries`; `main.py` turns that straight into an
 `ongoing_list` row (one bullet per entry) without going through the LLM --
 it's a verbatim slice of Wikipedia's own list, not something that needs
 synthesis. Other rolling/reference pages (`List of ...`) still get no row.
+
+Recurring calendar holidays get their own `category="holiday"` row, built
+by `pipeline/holiday_dates.py`'s `build_holiday_row` and called from
+`main.py` the same way as the obituary row -- no LLM call. It reuses the
+article's own `summary` (already generated per-article, see below) as the
+purpose/meaning component, and appends the deterministic schedule fact from
+`describe_holiday_date` (the Nth-weekday-of-month rule and whether this
+year's occurrence is the earliest/latest possible, for holidays that have
+one -- see Tiered Search above). This is a distinct concept from the
+`topic="holiday"` classification: a holiday article still gets a normal
+`category="new"`-shaped classification on `Article.topic`, but its
+*digest row* gets `category="holiday"` specifically so the frontend can
+render holidays as their own section, separate from new/cluster stories.
 
 Output rows are saved to `daily_trend_rows` via `DailySummarySaver`, which
 deletes-then-inserts per date rather than upserting -- clusters have no
@@ -146,6 +161,7 @@ prior rows, not accumulate duplicates.
 | `ongoing_trend` | A continuing article with a real news arc |
 | `ongoing_list` | A continuing rolling/reference page (`List of ...`, `Deaths in YYYY`) |
 | `ongoing_anomaly` | A continuing article on `BOT_TRAFFIC_TITLES` |
+| `holiday` | A recurring calendar holiday (`HOLIDAY_TITLES`), its own section |
 
 Every row also gets `topic`, `country`, and `is_mystery` -- a separate
 content-classification triple for frontend iconography (distinct from
@@ -276,7 +292,7 @@ create table prompt_run_log (
 create table daily_trend_rows (
   id uuid primary key default gen_random_uuid(),
   trending_date date not null,
-  category text not null check (category in ('new', 'new_cluster', 'ongoing_trend', 'ongoing_list', 'ongoing_anomaly')),
+  category text not null check (category in ('new', 'new_cluster', 'ongoing_trend', 'ongoing_list', 'ongoing_anomaly', 'holiday')),
   titles text[] not null,
   headline text not null,
   summary text not null,

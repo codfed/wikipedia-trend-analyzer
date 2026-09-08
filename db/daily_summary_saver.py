@@ -1,5 +1,6 @@
 """Persist daily_trend_rows -- one row per new/continuing trend or cluster."""
 from db.client import SupabaseClient
+from text_sanitize import strip_dash_artifacts
 
 TABLE = "daily_trend_rows"
 
@@ -42,8 +43,8 @@ class DailySummarySaver:
                     "trending_date": trending_date,
                     "category": row["category"],
                     "titles": row["titles"],
-                    "headline": row["headline"],
-                    "summary": row["summary"],
+                    "headline": strip_dash_artifacts(row["headline"]),
+                    "summary": strip_dash_artifacts(row["summary"]),
                     "image_url": row.get("image_url"),
                     "topic": row.get("topic"),
                     "country": row.get("country"),

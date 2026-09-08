@@ -107,7 +107,7 @@ def build_holiday_row(
     purpose = (summary or normalized_title).rstrip(". ")
 
     if info:
-        row_summary = f"{purpose}, fell on {info['date_phrase']} this year -- {info['extremity_phrase']}."
+        row_summary = f"{purpose}, fell on {info['date_phrase']} this year, {info['extremity_phrase']}."
     else:
         row_summary = f"{purpose}. Observed today, {target_date.strftime('%B')} {target_date.day}."
 

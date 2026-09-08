@@ -3,6 +3,7 @@ from typing import Optional
 
 from pipeline.models import Article
 from db.client import SupabaseClient
+from text_sanitize import strip_dash_artifacts
 
 ARTICLE_TABLE = "trending_articles_v2"
 EVAL_TABLE = "eval_results"
@@ -87,11 +88,11 @@ class ArticleSaver:
             "view_history": article.view_history or None,
             "is_newly_trending": article.is_newly_trending,
             "view_delta_percentage": article.view_delta_percentage,
-            "summary": article.summary,
+            "summary": strip_dash_artifacts(article.summary),
             "topic": article.topic,
             "country": article.country,
-            "trending_reason": article.trending_reason,
-            "trending_reason_short": article.trending_reason_short,
+            "trending_reason": strip_dash_artifacts(article.trending_reason),
+            "trending_reason_short": strip_dash_artifacts(article.trending_reason_short),
             "trending_reason_source": article.trending_reason_source,
             "is_mystery": article.is_mystery,
             "raw_search_results": article.raw_search_results or None,

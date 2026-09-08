@@ -57,6 +57,20 @@ result is found.  Stops early:
 Relevance is decided by a structured LLM call (`llm/relevance.py`) that returns
 `{"relevant": bool, "confidence": float}`. Threshold: `confidence >= 0.65`.
 
+Recurring calendar holidays (`Labor Day`, `Christmas`, `Diwali`, etc.) skip
+tiered search entirely -- there's rarely a real news story behind why a
+holiday trends (it's just the date), so search would have nothing reliable
+to find and was observed flipping the same holiday between mystery and
+not year to year depending on incidental press coverage. `pipeline/enricher.py`'s
+`HOLIDAY_TITLES` (hand-maintained like `BOT_TRAFFIC_TITLES`) triggers a
+deterministic `trending_reason` with `trending_reason_source="holiday"`
+and `is_mystery=False`, skipping eval/example-bank scoring the same way
+`rolling_list`/`carried_forward` articles do. This is independent of the
+`topic="holiday"` classification (see Daily Trend Summary below), which the
+per-article classifier infers from title+extract alone with no hardcoded
+list needed -- `HOLIDAY_TITLES` only exists because *that* signal can't be
+inferred without running (and having) search results.
+
 ### 2. Unified Explanation Fields
 | Field | Description |
 |---|---|

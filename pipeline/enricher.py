@@ -9,6 +9,27 @@ from llm.generator import ExplanationGenerator
 from llm.client import LLMClient
 from llm.prompts import PROMPT_VERSION
 
+# Recurring calendar holidays reliably trend every year on their date with no
+# actual news story behind them -- there's nothing for tiered search to find,
+# so it inconsistently marks them mystery depending on whatever incidental
+# press coverage happens to exist that year (observed: the same holiday
+# flips mystery true/false year to year). Hand-maintained like
+# BOT_TRAFFIC_TITLES (pipeline/daily_stats.py) since there's no reliable
+# structural signal to detect "this title is a holiday" -- expand as new
+# ones are spotted trending as mysteries.
+HOLIDAY_TITLES = {
+    "New Year's Day", "New Year's Eve",
+    "Martin Luther King Jr. Day", "Presidents' Day", "Valentine's Day",
+    "St. Patrick's Day", "Good Friday", "Easter", "Easter Sunday",
+    "Cinco de Mayo", "Mother's Day", "Memorial Day", "Father's Day",
+    "Juneteenth", "Independence Day", "Labor Day", "Columbus Day",
+    "Indigenous Peoples' Day", "Halloween", "Veterans Day", "Thanksgiving",
+    "Christmas Eve", "Christmas", "Boxing Day", "Groundhog Day",
+    "April Fools' Day", "Earth Day", "Bastille Day", "Guy Fawkes Night",
+    "Diwali", "Hanukkah", "Eid al-Fitr", "Eid al-Adha",
+    "Chinese New Year", "Lunar New Year",
+}
+
 
 class ArticleEnricher:
     """Runs the full enrichment pipeline for a single article:
@@ -32,6 +53,9 @@ class ArticleEnricher:
         m = DEATHS_ARTICLE_RE.match(article.title)
         if m:
             return self._enrich_deaths_article(article, int(m.group(1)))
+
+        if article.title in HOLIDAY_TITLES or article.normalized_title in HOLIDAY_TITLES:
+            return self._enrich_holiday_article(article)
 
         print(f"  [enricher] Running tiered search for: {article.title}")
         t0 = time.perf_counter()
@@ -91,4 +115,26 @@ class ArticleEnricher:
             f"  [enricher] Deaths article — scraped {len(entries)} entries "
             f"for {month_name} {day}"
         )
+        return article
+
+    def _enrich_holiday_article(self, article: Article) -> Article:
+        """Special-case handler for recurring calendar holidays (HOLIDAY_TITLES):
+        skip search entirely -- there's rarely a real news story behind why a
+        holiday trends, it's just the date itself, so search has nothing
+        reliable to find."""
+        title = article.normalized_title or article.title
+        article.trending_reason = (
+            f"{title} is trending because today is the holiday itself. "
+            f"Recurring calendar observances like this reliably drive a spike "
+            f"in Wikipedia traffic on their date every year."
+        )
+        article.trending_reason_short = (
+            f"{title} is trending because today is the holiday, a recurring "
+            f"calendar observance that predictably spikes Wikipedia traffic each year."
+        )
+        article.trending_reason_source = "holiday"
+        article.raw_search_results = ""
+        article.search_query_used = ""
+        article.is_mystery = False
+        print(f"  [enricher] Holiday article — skipped search for {title!r}")
         return article

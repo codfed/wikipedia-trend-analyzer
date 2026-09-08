@@ -38,8 +38,10 @@ sentencing, or court ruling of any kind).
 - World & science: politics_world (geopolitics, elections, government, international \
 relations), science_tech, space, health_medicine.
 - Other: death (use ONLY if the article itself is a "Deaths in YYYY"-style rolling list, not \
-for a person who happens to have died), religion_culture, natural_disaster, weird (the \
-subject itself is bizarre or defies easy categorization), other (nothing above fits).
+for a person who happens to have died), holiday (the article IS a recurring calendar holiday \
+or observance itself -- Labor Day, Christmas, Diwali, Halloween -- not an event that merely \
+happens to occur near one), religion_culture, natural_disaster, weird (the subject itself is \
+bizarre or defies easy categorization), other (nothing above fits).
 3. country: the ISO 3166-1 alpha-2 code (e.g. "US", "GB", "IN", "JP", "AR") of the one \
 country this subject is genuinely centered on, or null if no single country is central to \
 what it IS (a global topic, a person without one defining nationality tie, etc).

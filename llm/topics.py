@@ -11,7 +11,7 @@ import re
 DEFAULT_TOPIC = "other"
 
 # Must stay in sync with the grouped, human-readable list in
-# CLASSIFY_PROMPT (llm/prompts.py) -- that's what's shown to the model;
+# SUMMARY_PROMPT (llm/prompts.py) -- that's what's shown to the model;
 # this is the enforcement copy. A topic the model returns that isn't in
 # this set is replaced with DEFAULT_TOPIC rather than trusted verbatim.
 VALID_TOPICS = {
@@ -30,7 +30,7 @@ VALID_TOPICS = {
     # World & science
     "politics_world", "science_tech", "space", "health_medicine",
     # Other
-    "death", "religion_culture", "natural_disaster", "weird", DEFAULT_TOPIC,
+    "death", "holiday", "religion_culture", "natural_disaster", "weird", DEFAULT_TOPIC,
 }
 
 _COUNTRY_CODE_RE = re.compile(r"^[A-Z]{2}$")

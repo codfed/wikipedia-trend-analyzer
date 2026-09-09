@@ -14,7 +14,7 @@ describe_holiday_date returns None for these; callers fall back to a
 simpler, schedule-free description.
 """
 import calendar
-from datetime import date, datetime
+from datetime import date
 
 # name -> (month, weekday [Mon=0..Sun=6], nth [1-4, or -1 for "last"])
 NTH_WEEKDAY_HOLIDAYS = {
@@ -56,7 +56,13 @@ def _ordinal_suffix(day: int) -> str:
 def describe_holiday_date(title: str, target_date: date) -> dict | None:
     """Return {rule_phrase, extremity_phrase, date_phrase} for a holiday with
     a known Nth-weekday-of-month rule, or None if `title` isn't one (fixed-date
-    and lunar/lunisolar holidays -- see module docstring)."""
+    and lunar/lunisolar holidays -- see module docstring) or if target_date's
+    day-of-month falls outside the rule's valid range entirely. The latter
+    happens when Wikipedia traffic for the holiday spills into a second day
+    (e.g. "Labor Day" still trending the day after the actual Monday) --
+    target_date is then a day removed from any real occurrence of the rule,
+    so no earliest/latest claim can be made; treat it like the no-rule case
+    rather than let the day-8-vs-range-[1,7] math produce a negative "n"."""
     rule = NTH_WEEKDAY_HOLIDAYS.get(title)
     if rule is None:
         return None
@@ -64,6 +70,8 @@ def describe_holiday_date(title: str, target_date: date) -> dict | None:
 
     lo, hi = _day_of_month_range(month, weekday, nth)
     day = target_date.day
+    if not (lo <= day <= hi):
+        return None
 
     if day == hi:
         extremity_phrase = "the latest it could be"
@@ -86,40 +94,4 @@ def describe_holiday_date(title: str, target_date: date) -> dict | None:
         "rule_phrase": rule_phrase,
         "extremity_phrase": extremity_phrase,
         "date_phrase": date_phrase,
-    }
-
-
-def build_holiday_row(
-    normalized_title: str,
-    trending_date: str,
-    summary: str,
-    country: str | None = None,
-    image_url: str | None = None,
-) -> dict:
-    """A daily_trend_rows row (category="holiday") for a recurring calendar
-    holiday. Deterministic -- no LLM call here. `summary` is the article's own
-    already-generated content-classification summary (see main.py's
-    _generate_summary_and_classify), reused as the purpose/meaning component
-    since it's already grounded in the Wikipedia extract -- this function
-    only adds the deterministic schedule/date fact on top of it."""
-    target_date = datetime.strptime(trending_date, "%Y-%m-%d").date()
-    info = describe_holiday_date(normalized_title, target_date)
-    purpose = (summary or normalized_title).rstrip(". ")
-
-    if info:
-        row_summary = f"{purpose}, fell on {info['date_phrase']} this year, {info['extremity_phrase']}."
-    else:
-        row_summary = f"{purpose}. Observed today, {target_date.strftime('%B')} {target_date.day}."
-
-    return {
-        "category": "holiday",
-        "titles": [normalized_title],
-        "headline": normalized_title,
-        "summary": row_summary,
-        "image_url": image_url,
-        "topic": "holiday",
-        "country": country,
-        "is_mystery": False,
-        "streak_days": None,
-        "trajectory": None,
     }

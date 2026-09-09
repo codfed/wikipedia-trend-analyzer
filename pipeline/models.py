@@ -37,7 +37,7 @@ class Article:
     # Unified explanation fields (replaces news_relation / search_relation / *_short)
     trending_reason: str = ""
     trending_reason_short: str = ""
-    trending_reason_source: str = "unknown"  # "news"|"search"|"reddit"|"deep_search"|"unknown"
+    trending_reason_source: str = "unknown"  # "news"|"search"|"reddit"|"deep_search"|"holiday"|"rolling_list"|"carried_forward"|"piggyback"|"piggyback_search"|"anniversary"|"unknown"
 
     # Mystery flag — set when all search stages fail
     is_mystery: bool = False

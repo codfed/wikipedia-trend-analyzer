@@ -9,7 +9,17 @@ from pipeline.models import Article
 from search.tiered import TieredSearcher, SearchResult
 from llm.generator import ExplanationGenerator
 from llm.client import LLMClient
-from llm.prompts import PROMPT_VERSION
+from llm.prompts import (
+    PROMPT_VERSION,
+    HOLIDAY_EXPLANATION_MODEL,
+    HOLIDAY_EXPLANATION_TEMPERATURE,
+    HOLIDAY_EXPLANATION_MAX_TOKENS,
+    HOLIDAY_EXPLANATION_PROMPT,
+    SHORT_MODEL,
+    SHORT_TEMPERATURE,
+    SHORT_MAX_TOKENS,
+    SHORT_PROMPT,
+)
 
 # Recurring calendar holidays reliably trend every year on their date with no
 # actual news story behind them -- there's nothing for tiered search to find,
@@ -124,37 +134,53 @@ class ArticleEnricher:
         skip search entirely -- there's rarely a real news story behind why a
         holiday trends, it's just the date itself, so search has nothing
         reliable to find. For holidays with a known Nth-weekday-of-month
-        schedule rule (describe_holiday_date), state the rule and whether
-        this year's occurrence is the earliest/latest possible or in between --
-        for the rest (fixed-date, lunar/lunisolar), fall back to a simpler,
-        schedule-free reason rather than guessing."""
+        schedule rule (describe_holiday_date), the rule and this year's
+        earliest/latest-possible framing are handed to the LLM as optional
+        context rather than forced into the reason -- most occurrences land
+        in the unremarkable middle of the range, so the model only mentions
+        it when it's actually a notable edge case. Fixed-date and
+        lunar/lunisolar holidays (describe_holiday_date returns None) get no
+        schedule context at all, same as before."""
         title = article.normalized_title or article.title
         target_date = datetime.strptime(article.date, "%Y-%m-%d").date()
         info = describe_holiday_date(title, target_date)
 
         if info:
-            article.trending_reason = (
-                f"{title} falls on {info['rule_phrase']} each year. This year, "
-                f"that landed on {info['date_phrase']}, {info['extremity_phrase']}."
-            )
-            article.trending_reason_short = (
-                f"{title} fell on {info['date_phrase']} this year, "
-                f"{info['extremity_phrase']} for {info['rule_phrase']}."
+            schedule_fact_block = (
+                f"Schedule fact (mention only if genuinely interesting): {title} falls on "
+                f"{info['rule_phrase']} each year. This year that's {info['date_phrase']}, "
+                f"{info['extremity_phrase']}.\n\n"
             )
         else:
-            article.trending_reason = (
-                f"{title} is trending because today is the holiday itself. "
-                f"Recurring calendar observances like this reliably drive a spike "
-                f"in Wikipedia traffic on their date every year."
-            )
-            article.trending_reason_short = (
-                f"{title} is trending because today is the holiday, a recurring "
-                f"calendar observance that predictably spikes Wikipedia traffic each year."
-            )
+            schedule_fact_block = ""
+
+        prompt = HOLIDAY_EXPLANATION_PROMPT.format(
+            title=title,
+            schedule_fact_block=schedule_fact_block,
+            summary=article.summary or article.extract[:200],
+        )
+        article.trending_reason = self.llm_client.generate(
+            prompt=prompt,
+            model=HOLIDAY_EXPLANATION_MODEL,
+            temperature=HOLIDAY_EXPLANATION_TEMPERATURE,
+            max_tokens=HOLIDAY_EXPLANATION_MAX_TOKENS,
+        )
+
+        short_prompt = SHORT_PROMPT.format(
+            title=title,
+            summary=article.summary or article.extract[:200],
+            trending_reason=article.trending_reason,
+        )
+        article.trending_reason_short = self.llm_client.generate(
+            prompt=short_prompt,
+            model=SHORT_MODEL,
+            temperature=SHORT_TEMPERATURE,
+            max_tokens=SHORT_MAX_TOKENS,
+        )
 
         article.trending_reason_source = "holiday"
         article.raw_search_results = ""
         article.search_query_used = ""
         article.is_mystery = False
-        print(f"  [enricher] Holiday article — skipped search for {title!r}")
+        print(f"  [enricher] Holiday article — skipped search, LLM-composed reason for {title!r}")
         return article

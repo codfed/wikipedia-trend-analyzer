@@ -160,6 +160,40 @@ Trending reason:
 Short summary:"""
 
 # ---------------------------------------------------------------------------
+# Holiday explanation (Sonnet) -- recurring calendar holidays skip search
+# entirely (see pipeline/enricher.py's HOLIDAY_TITLES), but the schedule
+# fact from pipeline/holiday_dates.py's describe_holiday_date (this year's
+# earliest/latest-possible framing) is only sometimes worth stating -- most
+# occurrences land in the unremarkable middle of the range. Handed to the
+# model as optional context rather than force-appended to every holiday's
+# reason the way it used to be.
+# ---------------------------------------------------------------------------
+HOLIDAY_EXPLANATION_MODEL = "claude-sonnet-4-6"
+HOLIDAY_EXPLANATION_TEMPERATURE = 0.3
+HOLIDAY_EXPLANATION_MAX_TOKENS = 300
+HOLIDAY_EXPLANATION_PROMPT = """You are a concise trend analysis assistant.
+
+Your task: explain why the Wikipedia article "{title}" is trending today. The reason is simply \
+that today is the holiday itself -- recurring calendar observances like this reliably drive a \
+spike in Wikipedia traffic on their date every year, with no separate news story behind it.
+
+{schedule_fact_block}Rules:
+- Lead with the plain fact: "{title}" is trending because today is the holiday.
+- Only mention the schedule fact above if it's genuinely notable -- a true earliest-possible or \
+latest-possible occurrence, or another clearly rare edge case. If it's unremarkable (just some \
+number of days off from an edge, nothing special about this year), leave it out entirely rather \
+than forcing it in.
+- One to two short sentences total.
+- Do NOT hedge with "likely", "perhaps", "may have", or similar.
+- Do NOT start with "Here is the reason why…" or "The article is trending because…"
+- Avoid "spotlight" and "widespread".
+- Never use an em dash (—); rephrase with a period, comma, or separate sentence instead.
+
+Article summary: {summary}
+
+Explanation:"""
+
+# ---------------------------------------------------------------------------
 # Daily trend rows (Sonnet, structured JSON) -- run once per day
 # ---------------------------------------------------------------------------
 DAILY_SUMMARY_MODEL = "claude-sonnet-4-6"
@@ -236,3 +270,114 @@ separate sentence instead.
 Respond with ONLY valid JSON and nothing else -- no explanation before or after, no \
 corrections, no markdown fences:
 {{"rows": [{{"titles": ["..."], "headline": "...", "summary": "...", "subject_title": "...", "image_worthy": true, "is_death": false}}], "excluded_india_local": ["..."]}}"""
+
+# ---------------------------------------------------------------------------
+# Piggyback cross-reference (Sonnet) -- run once per date, after tiered search
+# has already failed for an article, against that same date's other already-
+# explained trending articles. See pipeline/piggyback.py.
+# ---------------------------------------------------------------------------
+PIGGYBACK_MODEL = "claude-sonnet-4-6"
+PIGGYBACK_TEMPERATURE = 0.2
+PIGGYBACK_MAX_TOKENS = 300
+PIGGYBACK_PROMPT = """You are deciding whether a Wikipedia article that no search stage could \
+explain is actually just piggybacking on another article that IS trending the same day -- \
+riding the same wave of reader interest rather than having its own separate cause. This \
+happens often: a country trends because a holiday tied to it is also trending, a sequel or \
+franchise trends because the new release is trending, an older event trends because an \
+anniversary or retrospective piece about it is trending, a person trends because a relative \
+or castmate of theirs is the real story.
+
+Unexplained article: {title}
+Summary: {summary}
+
+Today's other trending articles, with why each is trending:
+{day_context}
+
+Does "{title}" plausibly ride one of these? Only pick a candidate if there's a real, specific \
+connection to that title, not just a shared vague topic or category -- e.g. it's the country \
+of a trending holiday, the earlier film in a trending sequel's franchise, the person a trending \
+death is being remembered alongside. If nothing above plausibly explains it, set candidate_title \
+to null.
+
+Respond with ONLY valid JSON on one line:
+{{"candidate_title": <string copied exactly from the list above, or null>, "confidence": <0.0-1.0>, "explanation": <string, 2-3 sentences connecting "{title}" to the candidate if one exists, else "">}}
+
+If you provide an explanation, never use an em dash (—); rephrase with a period or comma instead."""
+
+# ---------------------------------------------------------------------------
+# Anniversary lead-up detection (Sonnet detect -> Haiku verify -> Sonnet
+# explain) -- run once per still-unresolved mystery article, after piggyback
+# cross-reference has had its shot. See pipeline/anniversary.py.
+# ---------------------------------------------------------------------------
+ANNIVERSARY_DETECT_MODEL = "claude-sonnet-4-6"
+ANNIVERSARY_DETECT_TEMPERATURE = 0.2
+ANNIVERSARY_DETECT_MAX_TOKENS = 200
+ANNIVERSARY_DETECT_PROMPT = """You are deciding whether a Wikipedia article that no search stage \
+could explain is trending because it's closely, specifically tied to a well-known historical \
+event that has a fixed calendar anniversary -- not because of anything happening right now. \
+Retrospective interest in such articles often builds in the days before the anniversary date \
+itself, before any fresh news coverage exists to search for.
+
+Article: {title}
+Summary: {summary}
+
+Only answer with an event if the connection is specific and direct -- the article IS the event, \
+a defining symbol/image/figure of it, or a person/place that's inseparable from it in public \
+memory (e.g. a famous photograph taken during a disaster, the flight number of a hijacked \
+plane, the ship that sank). Do not answer for a vague thematic or topical link, and do not use \
+someone's birthday, an award ceremony, or a routine recurring event as the "event" -- this is \
+specifically about the anniversary of a significant historical happening (disaster, attack, \
+assassination, or major cultural or historical milestone).
+
+If there's no such connection, or you are not confident of the exact date, respond with event \
+and date_mm_dd as null.
+
+Respond with ONLY valid JSON on one line:
+{{"event": <string describing the historical event, or null>, "date_mm_dd": <"MM-DD" string for \
+the event's calendar date, or null>, "confidence": <0.0-1.0>}}"""
+
+ANNIVERSARY_VERIFY_MODEL = "claude-haiku-4-5-20251001"
+ANNIVERSARY_VERIFY_TEMPERATURE = 0.0
+ANNIVERSARY_VERIFY_MAX_TOKENS = 100
+ANNIVERSARY_VERIFY_PROMPT = """You are verifying a claimed historical connection using search \
+results, before it's used to explain why a Wikipedia article is trending.
+
+Claim: "{title}" is specifically and substantively connected to "{event}".
+
+Search results:
+{results}
+
+Do these results confirm the claim -- do they show "{title}" is genuinely, specifically tied to \
+"{event}" (not just a coincidental keyword overlap or a vague topical similarity)?
+
+Respond with ONLY valid JSON on one line:
+{{"confirmed": <true|false>, "confidence": <0.0-1.0>}}"""
+
+ANNIVERSARY_EXPLANATION_MODEL = "claude-sonnet-4-6"
+ANNIVERSARY_EXPLANATION_TEMPERATURE = 0.3
+ANNIVERSARY_EXPLANATION_MAX_TOKENS = 512
+ANNIVERSARY_EXPLANATION_PROMPT = """You are a concise trend analysis assistant.
+
+Your task: explain why the Wikipedia article "{title}" is trending right now, even though there \
+is no current news about it -- it's trending in the run-up to the anniversary of {event}, which \
+falls on {date_phrase} ({weekday_phrase}), {days_until} day(s) from now. Readers and \
+retrospective coverage of anniversary events often build in the days before the date itself.
+
+Rules:
+- Lead with the anniversary connection: state plainly that "{title}" is trending ahead of the \
+{date_phrase} anniversary of {event}.
+- You may add one supporting detail about the connection between "{title}" and "{event}" ONLY if \
+it is directly supported by the search results below -- no speculation, no invented names, \
+dates, or figures beyond what's stated there or given above.
+- One to three short sentences total.
+- Do NOT hedge with "likely", "perhaps", "may have", or similar.
+- Do NOT start with "Here is the reason why…" or "The article is trending because…"
+- Avoid "spotlight" and "widespread".
+- Never use an em dash (—); rephrase with a period, comma, or separate sentence instead.
+
+Search results (verifying the {event} connection):
+{results}
+
+Article summary: {summary}
+
+Explanation:"""

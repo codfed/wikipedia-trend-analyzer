@@ -29,7 +29,8 @@ from pipeline.parser import FeaturedArticlesParser
 from pipeline.trending import calculate_trending_status
 from pipeline.enricher import ArticleEnricher, HOLIDAY_TITLES
 from pipeline.deaths_scraper import DEATHS_ARTICLE_RE, build_obituary_row
-from pipeline.holiday_dates import build_holiday_row
+from pipeline.piggyback import resolve_piggybacks, SOURCE_CROSS_REFERENCE, SOURCE_SEARCH_FALLBACK
+from pipeline.anniversary import resolve_anniversaries, SOURCE_ANNIVERSARY
 from pipeline.models import Article
 
 from search.client import SerperClient
@@ -166,6 +167,8 @@ def main() -> int:
 
     # Build the tiered searcher if Serper is available
     enricher: ArticleEnricher | None = None
+    relevance_fn = None
+    generator: ExplanationGenerator | None = None
     if serper_client:
         relevance_fn = partial(is_relevant, llm_client=llm_client)
         rewrite_fn = partial(rewrite_query, llm_client=llm_client)
@@ -265,6 +268,37 @@ def main() -> int:
             print("  Continuing to next article…")
             article_errors.append(f"{article.title}: {e}")
 
+    # --- Resolve mystery articles that piggyback on the day's other trends ---
+    # Runs once per date, after every article has a real trending_reason (or
+    # doesn't) to cross-reference against -- see pipeline/piggyback.py.
+    if enricher and not os.getenv("SKIP_PIGGYBACK"):
+        mystery_count = sum(1 for a in processed if a.is_mystery)
+        if mystery_count:
+            print(f"\n{'=' * 72}")
+            print(f"Cross-referencing {mystery_count} mystery article(s) against today's trends…")
+            print(f"{'=' * 72}")
+            processed = resolve_piggybacks(processed, llm_client, serper_client, relevance_fn, generator)
+            for article in processed:
+                if article.trending_reason_source not in (SOURCE_CROSS_REFERENCE, SOURCE_SEARCH_FALLBACK):
+                    continue
+                if article_saver and article_saver.save_article(article, PROMPT_VERSION):
+                    print(f"  [piggyback] re-saved {article.title} to Supabase")
+
+    # --- Resolve mystery articles trending ahead of a calendar anniversary ---
+    # Runs after piggyback resolution has had its shot -- see pipeline/anniversary.py.
+    if serper_client and not os.getenv("SKIP_ANNIVERSARY"):
+        mystery_count = sum(1 for a in processed if a.is_mystery)
+        if mystery_count:
+            print(f"\n{'=' * 72}")
+            print(f"Checking {mystery_count} mystery article(s) for an upcoming anniversary…")
+            print(f"{'=' * 72}")
+            processed = resolve_anniversaries(processed, llm_client, serper_client)
+            for article in processed:
+                if article.trending_reason_source != SOURCE_ANNIVERSARY:
+                    continue
+                if article_saver and article_saver.save_article(article, PROMPT_VERSION):
+                    print(f"  [anniversary] re-saved {article.title} to Supabase")
+
     # --- Run evals on just-processed articles ---
     enriched = [a for a in processed if a.trending_reason]
     if enriched and not os.getenv("SKIP_EVALS"):
@@ -308,17 +342,12 @@ def main() -> int:
                     continue
                 rows.append(build_obituary_row(article.normalized_title, article.death_entries, stats))
 
-            # Holiday row: deterministic, not LLM-generated for the schedule
-            # fact -- reuses the article's own already-generated summary for
-            # the purpose/meaning component. Built here rather than routed
-            # through DailySummaryGenerator, which excludes holidays entirely.
-            for article in processed:
-                if article.trending_reason_source != "holiday":
-                    continue
-                rows.append(build_holiday_row(
-                    article.normalized_title, article.date, article.summary,
-                    country=article.country, image_url=article.thumbnail,
-                ))
+            # Holidays get no separate deterministic row anymore -- they flow
+            # through DailySummaryGenerator like any other article, so the
+            # LLM can cluster them with a piggybacking article (e.g. "United
+            # States" + "Labor Day") into one cover-story row the same way it
+            # already clusters two independently-newsworthy articles. See
+            # llm/daily_summary.py's module docstring.
 
             DailySummarySaver(supabase_client).save_rows(date_str, rows, PROMPT_VERSION)
             print(f"  Saved {len(rows)} daily trend row(s)")

@@ -6,6 +6,20 @@ the same real-world story or event get pulled into a single cluster row with
 one synthesized blurb. Continuing trends don't get rows yet. One LLM call
 per date -- spotting which new articles share a story requires seeing the
 whole day's list at once.
+
+Holidays (trending_reason_source == "holiday") and anniversary-driven
+articles (trending_reason_source == "anniversary", see pipeline/anniversary.py)
+are NOT excluded from this call -- they're eligible for clustering like any
+other article, using their own already-generated trending_reason as context.
+This matters most for holidays: a holiday used to get its own deterministic
+row built outside this call entirely, which meant an article piggybacking on
+it (e.g. "United States" riding "Labor Day") could never be recognized as
+the same cover story the way two independently-newsworthy articles would be
+-- clustering is exactly the mechanism for that, so holidays now go through
+it like everything else. The one thing that doesn't come from the model:
+a row containing a holiday still gets forced to category="holiday" after the
+fact (see below), so the frontend can keep rendering holidays in their own
+section rather than mixed into the regular new/cluster feed.
 """
 from pipeline.daily_stats import TrendStats, CATEGORY_BOT_TRAFFIC
 from llm.client import LLMClient
@@ -19,6 +33,8 @@ from llm.prompts import (
 
 CATEGORY_NEW = "new"
 CATEGORY_NEW_CLUSTER = "new_cluster"
+CATEGORY_HOLIDAY = "holiday"
+SOURCE_HOLIDAY = "holiday"
 
 
 class DailySummaryGenerator:
@@ -43,10 +59,8 @@ class DailySummaryGenerator:
         Continuing articles and BOT_TRAFFIC_TITLES are dropped entirely --
         no rows yet. Purely domestic Indian stories with no worldwide
         significance are also dropped (model judgment, see
-        DAILY_SUMMARY_PROMPT step 7). Holidays (trending_reason_source ==
-        "holiday") are dropped too -- they get their own deterministic
-        category="holiday" row built by pipeline.holiday_dates.build_holiday_row
-        instead of going through this LLM call at all.
+        DAILY_SUMMARY_PROMPT step 7). Holidays are NOT dropped -- see the
+        module docstring for why.
         """
         new_block_lines = []
         eligible_titles: set[str] = set()
@@ -55,16 +69,20 @@ class DailySummaryGenerator:
         topics_by_title: dict[str, str] = {}
         countries_by_title: dict[str, str] = {}
         mystery_by_title: dict[str, bool] = {}
+        source_by_title: dict[str, str] = {}
 
         for article in articles:
             title = article["normalized_title"]
             s = stats.get(title)
-            if (
-                s is None
-                or not s.is_new
-                or s.category == CATEGORY_BOT_TRAFFIC
-                or article.get("trending_reason_source") == "holiday"
-            ):
+            if s is None or s.category == CATEGORY_BOT_TRAFFIC:
+                continue
+            # Holidays predictably show a real (if fading) traffic tail into
+            # a second day (see pipeline/holiday_dates.py), unlike ordinary
+            # articles where day 2+ means "no longer news, no row" -- so
+            # they stay eligible every day they're trending, not just the
+            # first, the same way the old deterministic holiday row used to
+            # get built unconditionally regardless of streak.
+            if article.get("trending_reason_source") != SOURCE_HOLIDAY and not s.is_new:
                 continue
 
             reason = (
@@ -80,6 +98,7 @@ class DailySummaryGenerator:
             topics_by_title[title] = article.get("topic") or DEFAULT_TOPIC
             countries_by_title[title] = article.get("country")
             mystery_by_title[title] = bool(article.get("is_mystery"))
+            source_by_title[title] = article.get("trending_reason_source")
 
         if not eligible_titles:
             return []
@@ -129,11 +148,25 @@ class DailySummaryGenerator:
             # EXCEPT is_death, which overrides topic to "death" regardless
             # of the subject's profession, since a per-article classification
             # from title+extract alone can never know "this person died
-            # today" (see DAILY_SUMMARY_PROMPT step 8).
-            topic = "death" if row.get("is_death") else topics_by_title.get(subject_title, DEFAULT_TOPIC)
+            # today" (see DAILY_SUMMARY_PROMPT step 8). A row containing a
+            # holiday gets the same kind of override, to "holiday" instead --
+            # the subject the model picks as the row's "face" might not be
+            # the holiday itself (e.g. "United States" over "Labor Day"), so
+            # topics_by_title.get(subject_title) alone can't be trusted to
+            # carry it.
+            has_holiday = any(source_by_title.get(t) == SOURCE_HOLIDAY for t in titles)
+            if has_holiday:
+                topic = "holiday"
+            elif row.get("is_death"):
+                topic = "death"
+            else:
+                topic = topics_by_title.get(subject_title, DEFAULT_TOPIC)
 
             rows.append({
-                "category": CATEGORY_NEW_CLUSTER if is_cluster else CATEGORY_NEW,
+                # See module docstring -- a holiday-containing row keeps
+                # category="holiday" (its own digest section) even when
+                # it's now a multi-title cover story.
+                "category": CATEGORY_HOLIDAY if has_holiday else (CATEGORY_NEW_CLUSTER if is_cluster else CATEGORY_NEW),
                 "titles": titles,
                 "headline": row.get("headline", ""),
                 "summary": row.get("summary", ""),
@@ -154,13 +187,14 @@ class DailySummaryGenerator:
         # topic/country/is_mystery still come from the article's own
         # classification since that's independent of the digest LLM call.
         for title in sorted(eligible_titles - claimed):
+            is_holiday = source_by_title.get(title) == SOURCE_HOLIDAY
             rows.append({
-                "category": CATEGORY_NEW,
+                "category": CATEGORY_HOLIDAY if is_holiday else CATEGORY_NEW,
                 "titles": [title],
                 "headline": title,
                 "summary": reasons_by_title[title],
                 "image_url": None,
-                "topic": topics_by_title.get(title, DEFAULT_TOPIC),
+                "topic": "holiday" if is_holiday else topics_by_title.get(title, DEFAULT_TOPIC),
                 "country": countries_by_title.get(title),
                 "is_mystery": mystery_by_title.get(title, False),
                 "streak_days": None,

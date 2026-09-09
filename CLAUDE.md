@@ -62,21 +62,105 @@ tiered search entirely -- there's rarely a real news story behind why a
 holiday trends (it's just the date), so search would have nothing reliable
 to find and was observed flipping the same holiday between mystery and
 not year to year depending on incidental press coverage. `pipeline/enricher.py`'s
-`HOLIDAY_TITLES` (hand-maintained like `BOT_TRAFFIC_TITLES`) triggers a
-deterministic `trending_reason` with `trending_reason_source="holiday"`
+`HOLIDAY_TITLES` (hand-maintained like `BOT_TRAFFIC_TITLES`) triggers
+`_enrich_holiday_article`, which sets `trending_reason_source="holiday"`
 and `is_mystery=False`, skipping eval/example-bank scoring the same way
-`rolling_list`/`carried_forward` articles do. This is independent of the
-`topic="holiday"` classification (see Daily Trend Summary below), which the
-per-article classifier infers from title+extract alone with no hardcoded
-list needed -- `HOLIDAY_TITLES` only exists because *that* signal can't be
-inferred without running (and having) search results.
+`rolling_list`/`carried_forward` articles do. The reason text itself is
+LLM-composed, not templated: `pipeline/holiday_dates.py`'s
+`describe_holiday_date` computes the Nth-weekday-of-month schedule fact
+(whether this year's occurrence is the earliest/latest possible, for
+holidays that have one) and hands it to the model as optional context
+rather than forcing it into the reason -- most occurrences land in the
+unremarkable middle of the range, so the model only mentions it when it's
+actually a notable edge case, rather than every holiday's reason reciting
+"N days after the earliest it could be" whether or not that's interesting.
+This is independent of the `topic="holiday"` classification (see Daily
+Trend Summary below), which the per-article classifier infers from
+title+extract alone with no hardcoded list needed -- `HOLIDAY_TITLES` only
+exists because *that* signal can't be inferred without running (and
+having) search results.
+
+### 1b. Piggyback Cross-Reference (`pipeline/piggyback.py`)
+Runs once per date, after the per-article loop finishes and every other
+article already has (or lacks) a real `trending_reason` to serve as context
+-- this is what makes it a whole-day pass rather than something that fits
+inside per-article enrichment. Targets only `is_mystery=True` articles: an
+article whose own tiered search found nothing may still be trending because
+it's riding another article that trended the *same day*, not because it has
+a separate cause of its own (the motivating case: `United States` trending
+alongside `Labor Day`, since `Labor Day` itself skips search entirely as a
+`HOLIDAY_TITLES` entry -- see Tiered Search above).
+
+Two stages, cheapest first:
+1. **LLM cross-reference** -- one call per mystery article, given its
+   title+summary and a list of that date's other already-explained articles
+   (`trending_reason_source` in `news`/`search`/`reddit`/`deep_search`/
+   `holiday`/`rolling_list`/`carried_forward` -- other still-unresolved
+   mysteries are excluded, there's nothing there to explain anything with).
+   The model either names one of those titles as a `candidate_title` with a
+   `confidence`, or returns `null`. At `confidence >= 0.65` the candidate's
+   connection is trusted directly and the mystery article is resolved with
+   `trending_reason_source="piggyback"`, no new search call.
+2. **Serper fallback** -- only when the model named a real candidate but
+   wasn't confident enough on its own: one targeted Serper search seeded
+   with `"{mystery title} {candidate title}"`, then the same relevance gate
+   (`llm/relevance.py`) and `ExplanationGenerator` used by tiered search take
+   over. Resolves with `trending_reason_source="piggyback_search"`.
+
+Articles that clear neither stage are left as mysteries. Resolved articles
+are re-saved to `trending_articles_v2` immediately (upsert on
+`title,trending_date`) so evals and the daily trend summary -- both of
+which run after this stage -- see the real reason instead of the mystery
+placeholder. `piggyback` (no real search results) skips LLM judging in
+`evals/judge.py`/`evals/metrics.py` the same way `holiday`/`rolling_list`/
+`carried_forward` do; `piggyback_search` has real search results behind it
+and is judged normally.
+
+### 1c. Anniversary Lead-Up (`pipeline/anniversary.py`)
+Runs once per date, after piggyback resolution has had its shot at the
+remaining `is_mystery` queue. Handles a different shape of mystery than
+piggyback: an article trending *ahead of* a calendar anniversary of a
+historical event it's closely tied to (the motivating case: `Falling Man`
+trending because September 11 is a few days out), where tiered search finds
+nothing because there's no current news yet, and there's no other trending
+article that day to cross-reference against either -- the reference point
+is the calendar, not the day's other trends.
+
+Three stages, each gating the next:
+1. **LLM world-knowledge detection** (`ANNIVERSARY_DETECT_PROMPT`) -- asks
+   whether the article's subject is specifically and directly tied to a
+   historical event with a fixed calendar date (not a vague thematic link,
+   not a birthday or routine recurring event). This is the one place in the
+   pipeline that leans on the model's own knowledge instead of search
+   results or a hand-curated list -- the set of possible anniversary-
+   adjacent articles is unbounded, unlike `HOLIDAY_TITLES` -- so its output
+   is treated as an unverified candidate until stage 3 confirms it.
+2. **Deterministic date-proximity check** (`pipeline/anniversary_dates.py`,
+   `describe_anniversary_proximity`) -- pure calendar math, same spirit as
+   `holiday_dates.py`. Forward-looking only: an anniversary that already
+   passed this year, even by a day, is not a match. Window is 7 days
+   (`LEAD_UP_WINDOW_DAYS`).
+3. **Grounding search + verification** -- a real Serper search for the
+   article title alongside the claimed event (wide, ~100-year time window,
+   since it's confirming a historical fact rather than hunting for recent
+   news), gated by a separate LLM call (`ANNIVERSARY_VERIFY_PROMPT`) that
+   checks the results actually substantiate the specific connection rather
+   than coincidental keyword overlap. Only a confirmed connection resolves
+   the mystery, with `trending_reason_source="anniversary"`; an unconfirmed
+   candidate is left as a mystery rather than guessed at. No "Nth
+   anniversary" year is asserted in the generated reason unless it's
+   present in the grounding search results themselves -- the detection
+   step's guess at an origin year is never trusted on its own.
+
+Like `piggyback_search`, `anniversary` has real search results behind it
+and is judged normally by evals (no skip-list entry needed).
 
 ### 2. Unified Explanation Fields
 | Field | Description |
 |---|---|
 | `trending_reason` | 3–4 sentence explanation |
 | `trending_reason_short` | 12–22 word compressed version |
-| `trending_reason_source` | `"news"` \| `"search"` \| `"reddit"` \| `"deep_search"` \| `"unknown"` |
+| `trending_reason_source` | `"news"` \| `"search"` \| `"reddit"` \| `"deep_search"` \| `"holiday"` \| `"rolling_list"` \| `"carried_forward"` \| `"piggyback"` \| `"piggyback_search"` \| `"anniversary"` \| `"unknown"` |
 
 Replaces the four v1 fields (`news_relation`, `news_relation_short`,
 `search_relation`, `search_relation_short`).
@@ -124,9 +208,7 @@ YYYY`) vs. a real story, and whether a title is bot-traffic -- is decided
 deterministically in Python before the prompt is built, and a continuing
 article's title is filtered out of any `new_rows` cluster it might have
 been merged into (a defense against the model rendering the exact same
-trend twice). Holidays (`trending_reason_source == "holiday"`, see Tiered
-Search above) are also excluded from this LLM call entirely -- they get
-their own deterministic row (below), not a model-judged one.
+trend twice).
 
 The one continuing-article row that *is* built today is the obituary row for
 `Deaths in YYYY`: `pipeline/enricher.py`'s `_enrich_deaths_article` already
@@ -136,18 +218,37 @@ on `Article.death_entries`; `main.py` turns that straight into an
 it's a verbatim slice of Wikipedia's own list, not something that needs
 synthesis. Other rolling/reference pages (`List of ...`) still get no row.
 
-Recurring calendar holidays get their own `category="holiday"` row, built
-by `pipeline/holiday_dates.py`'s `build_holiday_row` and called from
-`main.py` the same way as the obituary row -- no LLM call. It reuses the
-article's own `summary` (already generated per-article, see below) as the
-purpose/meaning component, and appends the deterministic schedule fact from
-`describe_holiday_date` (the Nth-weekday-of-month rule and whether this
-year's occurrence is the earliest/latest possible, for holidays that have
-one -- see Tiered Search above). This is a distinct concept from the
-`topic="holiday"` classification: a holiday article still gets a normal
-`category="new"`-shaped classification on `Article.topic`, but its
-*digest row* gets `category="holiday"` specifically so the frontend can
-render holidays as their own section, separate from new/cluster stories.
+Recurring calendar holidays (`trending_reason_source == "holiday"`) are
+**not** excluded from `DailySummaryGenerator`'s clustering call -- they're
+eligible for a row like any other article, using their own already-composed
+`trending_reason` (see Tiered Search above; holiday reasons are LLM-written
+now too, from `pipeline/enricher.py`'s `_enrich_holiday_article`) as
+context. This is what lets a holiday become a cover story: when another
+article piggybacks on it (e.g. `United States` on `Labor Day`, see Piggyback
+Cross-Reference above), the clustering model can recognize both as the same
+underlying story and merge them into one `titles`-plural row exactly the
+way it merges any other two related articles -- no separate deterministic
+merge path needed. The one thing that's still forced rather than left to
+the model: any row containing a holiday gets `category="holiday"` (and
+`topic="holiday"`) applied after the fact in `llm/daily_summary.py`, cluster
+or not, so the frontend can keep rendering holidays in their own section
+rather than mixed into the regular new/cluster feed. This is independent of
+the `topic="holiday"` *article*-level classification (`Article.topic`),
+which the per-article classifier infers from title+extract alone -- the
+digest-row override exists because the clustering model might pick a
+non-holiday member as the row's "face" (e.g. `United States` over `Labor
+Day`), and `topics_by_title.get(subject_title)` alone wouldn't reliably
+carry "holiday" in that case.
+
+Anniversary-driven articles (`trending_reason_source == "anniversary"`, see
+Anniversary Lead-Up above) are likewise never excluded from clustering --
+this matters when several independently-resolved articles converge on the
+same historical anniversary (e.g. multiple September 11-adjacent articles
+trending the same week): each already has its own real, LLM-written
+`trending_reason` mentioning the event by name, so the clustering call can
+recognize and merge them the same way it clusters any other shared story.
+No `category` override is needed here (unlike holidays) -- an
+anniversary-driven cluster is just a normal `new_cluster` row.
 
 Output rows are saved to `daily_trend_rows` via `DailySummarySaver`, which
 deletes-then-inserts per date rather than upserting -- clusters have no
@@ -210,6 +311,9 @@ Results are printed to stdout and optionally persisted to `eval_results`.
 |---|---|
 | `pipeline/models.py` | `Article` dataclass — single source of truth |
 | `pipeline/enricher.py` | Orchestrates tiered search + explanation generation |
+| `pipeline/piggyback.py` | Post-loop pass: resolves is_mystery articles that piggyback on the day's other trends |
+| `pipeline/anniversary.py` | Post-loop pass: resolves is_mystery articles trending ahead of a calendar anniversary |
+| `pipeline/anniversary_dates.py` | Date-math for the anniversary lead-up window |
 | `search/tiered.py` | `TieredSearcher` decision tree |
 | `llm/prompts.py` | All prompts + `PROMPT_VERSION` constant |
 | `llm/relevance.py` | Structured relevance gate |

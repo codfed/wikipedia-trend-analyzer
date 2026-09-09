@@ -34,7 +34,6 @@ from llm.daily_summary import DailySummaryGenerator
 from llm.prompts import PROMPT_VERSION
 from pipeline.daily_stats import compute_daily_stats
 from pipeline.deaths_scraper import DEATHS_ARTICLE_RE, build_obituary_row, scrape_deaths_for_date
-from pipeline.holiday_dates import build_holiday_row
 
 ARTICLE_TABLE = "trending_articles_v2"
 
@@ -84,16 +83,10 @@ def main() -> int:
         if entries:
             rows.append(build_obituary_row(title, entries, stats))
 
-    # Holiday rows: same data already saved on trending_articles_v2 (no
-    # re-scraping needed, unlike obituaries), just rebuild the row.
-    for r in saved:
-        if r.get("trending_reason_source") != "holiday":
-            continue
-        title = r["normalized_title"] or r["title"]
-        rows.append(build_holiday_row(
-            title, trending_date, r.get("summary") or "",
-            country=r.get("country"), image_url=r.get("thumbnail"),
-        ))
+    # Holidays get no separate row here anymore -- DailySummaryGenerator.generate()
+    # above already includes them (see its module docstring) and clusters
+    # them with any piggybacking article the same way it clusters anything
+    # else.
 
     print(f"\nGenerated {len(rows)} row(s):")
     for row in rows:

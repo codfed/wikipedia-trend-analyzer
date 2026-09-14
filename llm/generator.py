@@ -11,11 +11,19 @@ from llm.prompts import (
     EXPLANATION_PROMPT,
     DEFAULT_LENGTH_RULE,
     REDDIT_LENGTH_RULE,
+    NYT_GAMES_LENGTH_RULE,
+    NYT_GAMES_ACCURACY_NOTE,
     SHORT_MODEL,
     SHORT_TEMPERATURE,
     SHORT_MAX_TOKENS,
     SHORT_PROMPT,
 )
+from llm.nyt_games import mentions_nyt_games
+
+_LENGTH_RULES_BY_STAGE = {
+    "reddit": REDDIT_LENGTH_RULE,
+    "nyt_games": NYT_GAMES_LENGTH_RULE,
+}
 
 
 class ExplanationGenerator:
@@ -35,8 +43,14 @@ class ExplanationGenerator:
         """Return (trending_reason, trending_reason_short)."""
         few_shot_block = self._build_few_shot_block(search_result.stage)
 
-        length_rule = (
-            REDDIT_LENGTH_RULE if search_result.stage == "reddit" else DEFAULT_LENGTH_RULE
+        length_rule = _LENGTH_RULES_BY_STAGE.get(search_result.stage, DEFAULT_LENGTH_RULE)
+        # NYT_GAMES_LENGTH_RULE already carries the trick-category warning --
+        # only layer the standalone note on top when a *different* rule won
+        # (reddit/default) but the content is clearly NYT-game-sourced anyway.
+        nyt_games_note = (
+            NYT_GAMES_ACCURACY_NOTE
+            if length_rule is not NYT_GAMES_LENGTH_RULE and mentions_nyt_games(search_result.formatted)
+            else ""
         )
         prompt = EXPLANATION_PROMPT.format(
             title=article.normalized_title,
@@ -45,6 +59,7 @@ class ExplanationGenerator:
             results=search_result.formatted[:3000],
             few_shot_block=few_shot_block,
             length_rule=length_rule,
+            nyt_games_note=nyt_games_note,
         )
         trending_reason = self.llm_client.generate(
             prompt=prompt,

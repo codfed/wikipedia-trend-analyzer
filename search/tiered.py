@@ -23,7 +23,7 @@ def date_window(article: Article, days_back: int) -> str:
 
 @dataclass
 class SearchResult:
-    stage: str          # "news" | "search" | "reddit" | "deep_search" | "unknown"
+    stage: str          # "news" | "search" | "reddit" | "nyt_games" | "deep_search" | "unknown"
     query: str
     raw: str            # JSON string of the raw Serper response
     formatted: str      # human-readable summary for LLM prompts
@@ -32,7 +32,8 @@ class SearchResult:
 
 
 class TieredSearcher:
-    """Runs news → web → reddit → deep search, stopping at first relevant result.
+    """Runs news → web → reddit → NYT games → deep search, stopping at first
+    relevant result.
 
     Relevance gating is performed by an injected callable:
         is_relevant(article, formatted_results) -> (bool, float)
@@ -77,7 +78,19 @@ class TieredSearcher:
         if result.relevant:
             return result
 
-        # Stage 4 — deep search (rewritten query, past month)
+        # Stage 4 — NYT daily puzzle games (Connections, Wordle, Spelling Bee,
+        # Strands), past few days. A surprisingly common trend driver that
+        # looks nothing like news or grassroots virality: an obscure word or
+        # name appears as a Connections category/answer (or in Wordle/Spelling
+        # Bee/Strands) and solvers immediately look it up on Wikipedia. Sits
+        # after reddit (both are "not news" fallbacks) but before the
+        # expensive rewritten deep search, since this is a cheap, specific
+        # query worth trying first.
+        result = self._try_nyt_games(query, article)
+        if result.relevant:
+            return result
+
+        # Stage 5 — deep search (rewritten query, past month)
         result = self._try_deep(article)
         if result.relevant:
             return result
@@ -145,6 +158,28 @@ class TieredSearcher:
         return SearchResult(
             stage="reddit",
             query=reddit_query,
+            raw=json.dumps(raw_data),
+            formatted=formatted,
+            relevant=relevant,
+            confidence=confidence,
+        )
+
+    def _try_nyt_games(self, query: str, article: Article) -> SearchResult:
+        # Recap/answer-key coverage of NYT's daily puzzles usually publishes
+        # same-day, sometimes a day late -- a short window keeps this tight
+        # and cheap, unlike reddit/deep search's month-wide nets.
+        games_query = f'{query} (NYT Connections OR NYT Wordle OR "Spelling Bee" OR NYT Strands)'
+        try:
+            raw_data = self.serper.search(games_query, time_range=date_window(article, 2))
+        except Exception as e:
+            print(f"  [tiered] NYT games search failed: {e}")
+            return self._empty_result("nyt_games", games_query)
+
+        formatted = format_organic(raw_data)
+        relevant, confidence = self._check_relevance(article, formatted, "nyt_games")
+        return SearchResult(
+            stage="nyt_games",
+            query=games_query,
             raw=json.dumps(raw_data),
             formatted=formatted,
             relevant=relevant,

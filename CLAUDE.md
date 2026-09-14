@@ -50,7 +50,15 @@ result is found.  Stops early:
 - **Stage 3**: Serper `site:reddit.com` search (past month) — catches grassroots
   virality (e.g. a TIL repost) that predates the article's exact title and can
   lag its source content by weeks
-- **Stage 4**: Deep — LLM rewrites query (`search/query_rewriter.py`), considering
+- **Stage 4**: Serper web search for the title alongside NYT Connections/
+  Wordle/Spelling Bee/Strands (past 2 days) — catches a pattern that looks
+  nothing like news or grassroots virality: an obscure word or name appears
+  as a Connections category/answer (or in Wordle/Spelling Bee/Strands) and
+  solvers immediately look it up on Wikipedia (motivating case: `Garfield`
+  characters spiking the day a Connections category referenced them). A
+  short, cheap, specific query, so it runs before the more expensive
+  rewritten deep search rather than after it.
+- **Stage 5**: Deep — LLM rewrites query (`search/query_rewriter.py`), considering
   non-news drivers (video, podcast, forum) + Serper (past month)
 - **unknown**: all stages failed → `is_mystery=True`
 
@@ -94,8 +102,8 @@ alongside `Labor Day`, since `Labor Day` itself skips search entirely as a
 Two stages, cheapest first:
 1. **LLM cross-reference** -- one call per mystery article, given its
    title+summary and a list of that date's other already-explained articles
-   (`trending_reason_source` in `news`/`search`/`reddit`/`deep_search`/
-   `holiday`/`rolling_list`/`carried_forward` -- other still-unresolved
+   (`trending_reason_source` in `news`/`search`/`reddit`/`nyt_games`/
+   `deep_search`/`holiday`/`rolling_list`/`carried_forward` -- other still-unresolved
    mysteries are excluded, there's nothing there to explain anything with).
    The model either names one of those titles as a `candidate_title` with a
    `confidence`, or returns `null`. At `confidence >= 0.65` the candidate's
@@ -160,7 +168,7 @@ and is judged normally by evals (no skip-list entry needed).
 |---|---|
 | `trending_reason` | 3–4 sentence explanation |
 | `trending_reason_short` | 12–22 word compressed version |
-| `trending_reason_source` | `"news"` \| `"search"` \| `"reddit"` \| `"deep_search"` \| `"holiday"` \| `"rolling_list"` \| `"carried_forward"` \| `"piggyback"` \| `"piggyback_search"` \| `"anniversary"` \| `"unknown"` |
+| `trending_reason_source` | `"news"` \| `"search"` \| `"reddit"` \| `"nyt_games"` \| `"deep_search"` \| `"holiday"` \| `"rolling_list"` \| `"carried_forward"` \| `"piggyback"` \| `"piggyback_search"` \| `"anniversary"` \| `"unknown"` |
 
 Replaces the four v1 fields (`news_relation`, `news_relation_short`,
 `search_relation`, `search_relation_short`).
@@ -285,18 +293,28 @@ flag alongside the topic icon -- the two are independent (a story can be
 `tennis` + `ES` at once).
 
 A digest row's `topic`/`country`/`is_mystery` are just copied from its
-`subject_title` article (`llm/daily_summary.py`), not re-judged -- with one
-exception: article-level classification can never know "this person died
-today" from title+extract alone (their Wikipedia bio reads the same
-whether they're alive or not), so `DailySummaryGenerator` still asks the
-digest LLM call for one narrow boolean, `is_death`, and overrides the
-row's `topic` to `"death"` when true, regardless of the subject's
-profession. The `Deaths in YYYY` obituary row (see above) gets
-`topic="death"`, `country=None`, `is_mystery=False` deterministically in
-`build_obituary_row`, not via any LLM. Rows built by the safety net (the
-model dropped a title by accident) still pull `topic`/`country`/`is_mystery`
-from the article's own classification, since that's independent of the
-digest LLM call succeeding.
+`subject_title` article (`llm/daily_summary.py`), not re-judged -- with two
+exceptions, both cases the per-article classifier structurally cannot know
+from title+extract alone (it never sees *why* something is trending):
+`is_death` (article-level classification can never know "this person died
+today" -- their Wikipedia bio reads the same whether they're alive or not),
+where `DailySummaryGenerator` asks the digest LLM call for one narrow
+boolean and overrides the row's `topic` to `"death"` when true, regardless
+of the subject's profession; and a row whose cause is an NYT daily puzzle
+answer (Connections, Wordle, Spelling Bee, Strands -- see Tiered Search
+above and `llm/nyt_games.py`), which gets `topic="puzzle"` forced the same
+way, except detected deterministically from the article's own
+already-generated `trending_reason` text (no digest LLM judgment needed,
+since the explanation prompts already require naming the specific puzzle
+whenever that's really the cause) rather than a model-judged boolean.
+Unlike `is_death`/holiday, the puzzle override doesn't touch `category` --
+it's icon-only, no dedicated digest section. The `Deaths in YYYY` obituary
+row (see above) gets `topic="death"`, `country=None`, `is_mystery=False`
+deterministically in `build_obituary_row`, not via any LLM. Rows built by
+the safety net (the model dropped a title by accident) still apply the
+holiday/puzzle topic override and otherwise pull `topic`/`country`/
+`is_mystery` from the article's own classification, since both are
+independent of the digest LLM call succeeding.
 
 ### 6. Eval-First Design
 Evals run automatically after every pipeline run.  Two fields are evaluated:

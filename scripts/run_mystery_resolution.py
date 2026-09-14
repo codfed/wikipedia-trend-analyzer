@@ -1,7 +1,10 @@
 """Standalone entry point: run piggyback + anniversary resolution for a date
 whose per-article enrichment already ran and is saved in
-trending_articles_v2 -- skips fetch/parse/tiered-search/eval entirely, and
-only touches articles that are still is_mystery.
+trending_articles_v2 -- skips fetch/parse/tiered-search entirely, and only
+touches articles that are still is_mystery. Evals and example-bank storage
+DO run here (on just the newly-resolved articles), matching what a live
+main.py run does right after resolution -- a standalone backfill shouldn't
+be a second-class citizen that silently skips the self-improving loop.
 
 TARGET_DATE here means the same thing it means for main.py and
 scripts/run_daily_summary.py: the featured-feed URL date, which always
@@ -25,6 +28,7 @@ load_dotenv()
 
 from db.client import SupabaseClient
 from db.saver import ArticleSaver
+from evals.runner import run_evals, store_examples
 from llm.client import LLMClient
 from llm.generator import ExplanationGenerator
 from llm.relevance import is_relevant
@@ -116,7 +120,8 @@ def main() -> int:
     llm_client = LLMClient()
     serper_client = SerperClient()
     relevance_fn = partial(is_relevant, llm_client=llm_client)
-    generator = ExplanationGenerator(llm_client=llm_client, example_bank=ExampleBank())
+    example_bank = ExampleBank()
+    generator = ExplanationGenerator(llm_client=llm_client, example_bank=example_bank)
 
     print(f"\n{'=' * 72}\nPiggyback cross-reference…\n{'=' * 72}")
     processed = resolve_piggybacks(processed, llm_client, serper_client, relevance_fn, generator)
@@ -140,14 +145,25 @@ def main() -> int:
         print(f"\nStill unresolved: {[a.title for a in still_mystery]}")
 
     if os.getenv("DRY_RUN"):
-        print("\nDRY_RUN set -- not saving.")
+        print("\nDRY_RUN set -- not saving or evaluating.")
         return 0
 
-    if resolved:
-        saver = ArticleSaver(supabase_client)
-        for a in resolved:
-            ok = saver.save_article(a, PROMPT_VERSION)
-            print(f"  {'saved' if ok else 'SAVE FAILED'}: {a.title}")
+    if not resolved:
+        return 0
+
+    saver = ArticleSaver(supabase_client)
+    for a in resolved:
+        ok = saver.save_article(a, PROMPT_VERSION)
+        print(f"  {'saved' if ok else 'SAVE FAILED'}: {a.title}")
+
+    # Same eval + example-bank step a live main.py run does right after
+    # resolution -- only on the articles this run actually changed, since
+    # the rest of that date's articles were already evaluated whenever
+    # main.py originally produced them.
+    if not os.getenv("SKIP_EVALS"):
+        print(f"\n{'=' * 72}\nRunning evals on {len(resolved)} resolved article(s)…\n{'=' * 72}")
+        run_evals(resolved, llm_client, db_saver=saver, prompt_version=PROMPT_VERSION)
+        store_examples(resolved, llm_client, example_bank)
 
     return 0
 

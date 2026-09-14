@@ -39,7 +39,7 @@ SOURCE_SEARCH_FALLBACK = "piggyback_search"
 # against. Excludes other still-unresolved mysteries -- there's nothing
 # there to explain anything with.
 _EXPLAINED_SOURCES = {
-    "news", "search", "reddit", "deep_search",
+    "news", "search", "reddit", "nyt_games", "deep_search",
     "holiday", "rolling_list", "carried_forward",
 }
 

@@ -31,6 +31,13 @@ VALID_TOPICS = {
     "politics_world", "science_tech", "space", "health_medicine",
     # Other
     "death", "holiday", "religion_culture", "natural_disaster", "weird", DEFAULT_TOPIC,
+    # "puzzle" is override-only, like "death" -- never emitted by the
+    # per-article classifier (an NYT puzzle answer isn't visible from an
+    # article's own title+extract), only forced onto a digest row after the
+    # fact by llm/daily_summary.py when the article's trending_reason names
+    # an NYT daily puzzle. Included here so it's a documented, valid member
+    # of the same topic vocabulary the frontend renders icons for.
+    "puzzle",
 }
 
 _COUNTRY_CODE_RE = re.compile(r"^[A-Z]{2}$")

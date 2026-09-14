@@ -115,6 +115,38 @@ def run_evals(
     return 0 if passed_count == judged_count else 1
 
 
+def store_examples(articles: list[Article], llm_client: LLMClient, bank) -> None:
+    """Score enriched articles and store high-scorers in the example bank
+    (`memory.example_bank.ExampleBank`) for future few-shot injection.
+
+    Shared between main.py (called right after run_evals on a live run's
+    freshly-enriched articles) and scripts/run_mystery_resolution.py (called
+    on just the mystery articles a standalone backfill resolved) -- any path
+    that produces a real trending_reason from real search evidence should
+    feed the self-improving loop the same way, not just the live pipeline.
+    """
+    judge = LLMJudge(llm_client)
+    for article in articles:
+        if article.is_mystery or not article.raw_search_results:
+            continue
+        try:
+            result = judge.score_trending_reason(article, article.raw_search_results)
+            if result.score >= 4:
+                bank.add_example(
+                    title=article.title,
+                    source=article.trending_reason_source,
+                    raw_input=article.raw_search_results[:3000],
+                    trending_reason=article.trending_reason,
+                    score=result.score,
+                )
+                print(
+                    f"  [example_bank] stored example for {article.title} "
+                    f"(score={result.score})"
+                )
+        except Exception as e:
+            print(f"  [example_bank] scoring failed for {article.title}: {e}")
+
+
 def _save_eval_rows(db_saver, article, results, prompt_version):
     """Persist eval results to Supabase eval_results table."""
     for r in results:

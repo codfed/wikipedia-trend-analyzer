@@ -69,7 +69,10 @@ explaining why a Wikipedia article is suddenly trending.
 A valid explanation doesn't have to be a news event — a viral reddit thread, \
 forum discussion, TikTok/YouTube video, or podcast episode is just as valid a \
 cause of a traffic spike as a news story, as long as the content is clearly \
-about the article's subject.
+about the article's subject. A New York Times daily puzzle (Connections, \
+Wordle, Spelling Bee, Strands) featuring the subject as an answer, a \
+category name, or a clue is also valid — solvers routinely look up an \
+unfamiliar term right after encountering it in that day's puzzle.
 
 Article title: {title}
 Article summary: {summary}
@@ -98,7 +101,7 @@ or causal links that the results do not state.
 
 Rules:
 {length_rule}
-- Stay direct: no filler, no meandering asides, no repeating the same point in different words.
+{nyt_games_note}- Stay direct: no filler, no meandering asides, no repeating the same point in different words.
 - Do NOT hedge with "likely", "perhaps", "may have", or similar unless the search text \
 uses that uncertainty explicitly.
 - Light tone or whimsy is fine only if it adds no new factual claims and does not wander.
@@ -132,6 +135,70 @@ REDDIT_LENGTH_RULE = (
     "explicitly — that spread pattern is often the actual story.\n"
     "- Every subreddit name and quote must come verbatim from the results below — never "
     "invent one."
+)
+
+# NYT puzzle-driven trends are a simple, mechanical cause (a puzzle answer
+# drove lookups) rather than a story with any real depth to unpack, so this
+# stays short — but naming the specific game and category/mechanic is the
+# one piece of information that makes the explanation legible at all (vs.
+# reddit/news, "trending" on its own means nothing without knowing which
+# puzzle it was). Connections specifically gets a callout: its whole gimmick
+# is splitting related-seeming items into different categories via wordplay
+# (homophone, hidden word, surname match, etc.), so "X was one of the
+# answers" reads as a plausible-sounding but wrong oversimplification when
+# the results actually describe a trick category -- observed producing a
+# genuinely incorrect explanation (Garfield miscast as a straightforward
+# "characters" answer when the real mechanic was GARFIELD-the-president
+# hidden in a US-presidents category, split from ODIE in a different
+# wordplay category) despite the correct detail being right there in the
+# search results the model was given.
+NYT_GAMES_LENGTH_RULE = (
+    "- This is sourced from coverage of an NYT daily puzzle (Connections, Wordle, Spelling Bee, "
+    "or Strands) — name the specific puzzle, and state the EXACT wordplay/mechanic the article's "
+    "own subject was placed under (e.g. a homophone, a hidden word, a surname match), not a "
+    "vague \"was one of the answers.\"\n"
+    "- Source priority is strict: a result that explicitly explains the mechanic (e.g. \"X is a "
+    "president's surname\", \"Y sounds like the letters O-D\") always outranks a result that is "
+    "only guessing at the grouping or describing the solving experience without explaining why "
+    "(e.g. a comment like \"I think the correct four is A, B, C, D... hard to tell\" is NOT an "
+    "explanation, it is a guess). If an explaining result exists anywhere in the results below, "
+    "build the explanation from THAT one and ignore the guessing comment entirely — do not merge "
+    "the two into a single claim, and do not let the guess's item list override the explaining "
+    "result's.\n"
+    "- NYT Connections in particular deliberately splits related items (e.g. two characters from "
+    "the same show) into DIFFERENT categories using wordplay, rather than grouping them under "
+    "the \"obvious\" shared category. Only name items genuinely part of this article's own "
+    "subject — don't pull in the puzzle's other, unrelated answers just because one result "
+    "lists all of them together.\n"
+    "- One to two short sentences is enough — this is a simple, mechanical cause, not a story "
+    "that needs unpacking.\n"
+    "- Every puzzle/category/clue name must come verbatim from the results below — never invent "
+    "one; if no result actually explains the mechanic, just say \"an NYT daily puzzle\" rather "
+    "than guessing at the category.\n"
+    "- Worked example of the source-priority rule (the pattern, not literal content -- apply this "
+    "same logic to whatever the actual results say): if one result explains a mechanic directly "
+    "(\"X is a hidden reference to Y\") and a separate result is someone's uncertain comment "
+    "(\"I think it might be A, B, C... hard to tell\"), build the explanation ONLY from the first "
+    "result. Do not mention any items that appear solely in the guessing comment."
+)
+
+# Standalone version of the same warning for when NYT-game content shows up
+# under a DIFFERENT stage's length rule (e.g. a plain "search"-stage result
+# that happens to surface Connections coverage, as in the Garfield case
+# above) -- injected as an extra rule line alongside whatever length_rule
+# was already chosen, so reddit/default style guidance isn't displaced, only
+# supplemented. See llm/generator.py's _mentions_nyt_games.
+NYT_GAMES_ACCURACY_NOTE = (
+    "- These results reference an NYT daily puzzle (Connections, Wordle, Spelling Bee, or "
+    "Strands). NYT Connections in particular deliberately splits related items (e.g. two "
+    "characters from the same show) into DIFFERENT categories using wordplay (a homophone, a "
+    "hidden word, a surname match, etc.) rather than grouping them under the \"obvious\" shared "
+    "category. Only name items genuinely part of this article's own subject.\n"
+    "- Source priority is strict: a result that explicitly explains the mechanic always outranks "
+    "a result that's only guessing at the grouping (e.g. \"I think it's these four... hard to "
+    "tell\" is a guess, not an explanation). If an explaining result exists anywhere below, build "
+    "the explanation from THAT one and ignore the guessing comment entirely — never merge the "
+    "two into one claim.\n"
 )
 
 # ---------------------------------------------------------------------------
@@ -266,6 +333,10 @@ or summary, even to quote someone -- use single quotes ('like this') for any quo
 instead.
 - Never use an em dash (—) in a headline or summary; rephrase with a period, comma, or \
 separate sentence instead.
+- Anniversary phrasing: use "Nth anniversary of X" (e.g. "25th anniversary of the September 11 \
+attacks"), never make the event itself the subject of a verb like "marks" or "reaches" (avoid \
+"the September 11 attacks mark their 25th anniversary" -- that reads like a press release, not \
+a headline).
 
 Respond with ONLY valid JSON and nothing else -- no explanation before or after, no \
 corrections, no markdown fences:
@@ -302,7 +373,9 @@ to null.
 Respond with ONLY valid JSON on one line:
 {{"candidate_title": <string copied exactly from the list above, or null>, "confidence": <0.0-1.0>, "explanation": <string, 2-3 sentences connecting "{title}" to the candidate if one exists, else "">}}
 
-If you provide an explanation, never use an em dash (—); rephrase with a period or comma instead."""
+If you provide an explanation: never use an em dash (—), rephrase with a period or comma instead; \
+and if it mentions an anniversary number, phrase it as "the 25th anniversary of X" rather than \
+making X the subject of a verb like "marks" or "reaches" (avoid "X marks its 25th anniversary")."""
 
 # ---------------------------------------------------------------------------
 # Anniversary lead-up detection (Sonnet detect -> Haiku verify -> Sonnet
@@ -369,6 +442,9 @@ Rules:
 - You may add one supporting detail about the connection between "{title}" and "{event}" ONLY if \
 it is directly supported by the search results below -- no speculation, no invented names, \
 dates, or figures beyond what's stated there or given above.
+- If a specific anniversary number appears in the search results (e.g. "25th"), phrase it as \
+"the 25th anniversary of {event}" -- never make {event} the grammatical subject of a verb like \
+"marks" or "reaches" (avoid "{event} marks its 25th anniversary").
 - One to three short sentences total.
 - Do NOT hedge with "likely", "perhaps", "may have", or similar.
 - Do NOT start with "Here is the reason why…" or "The article is trending because…"

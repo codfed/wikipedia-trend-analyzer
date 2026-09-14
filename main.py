@@ -55,8 +55,7 @@ from db.saver import ArticleSaver
 from memory.example_bank import ExampleBank
 from memory.prompt_tracker import PromptTracker
 
-from evals.runner import run_evals
-from evals.judge import LLMJudge
+from evals.runner import run_evals, store_examples
 
 from pipeline.daily_stats import compute_daily_stats
 from llm.daily_summary import DailySummaryGenerator
@@ -311,7 +310,7 @@ def main() -> int:
 
         # Store high-scoring outputs in example bank
         if supabase_client:
-            _maybe_store_examples(enriched, llm_client, example_bank)
+            store_examples(enriched, llm_client, example_bank)
 
     # --- Log run ---
     if supabase_client and processed:
@@ -391,34 +390,6 @@ def main() -> int:
         run_failed = True
 
     return 1 if run_failed else 0
-
-
-def _maybe_store_examples(
-    articles: list[Article],
-    llm_client: LLMClient,
-    bank: ExampleBank,
-) -> None:
-    """Score enriched articles and store high-scorers in the example bank."""
-    judge = LLMJudge(llm_client)
-    for article in articles:
-        if article.is_mystery or not article.raw_search_results:
-            continue
-        try:
-            result = judge.score_trending_reason(article, article.raw_search_results)
-            if result.score >= 4:
-                bank.add_example(
-                    title=article.title,
-                    source=article.trending_reason_source,
-                    raw_input=article.raw_search_results[:3000],
-                    trending_reason=article.trending_reason,
-                    score=result.score,
-                )
-                print(
-                    f"  [example_bank] stored example for {article.title} "
-                    f"(score={result.score})"
-                )
-        except Exception as e:
-            print(f"  [example_bank] scoring failed for {article.title}: {e}")
 
 
 if __name__ == "__main__":

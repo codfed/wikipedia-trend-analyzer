@@ -61,6 +61,12 @@ class LLMJudge:
                 "more verbose, naming specific subreddits by r/name and quoting distinctive "
                 "phrases from the results, so do NOT penalise length or direct quotes here"
             )
+        elif article.trending_reason_source == "nyt_games":
+            length_expectation = (
+                "roughly one to two short sentences — this is a simple, mechanical cause (a "
+                "puzzle answer drove lookups), so do NOT penalise brevity as long as it names "
+                "the specific NYT puzzle (and category/clue, if the results give one)"
+            )
         else:
             length_expectation = "roughly one to three short sentences"
 

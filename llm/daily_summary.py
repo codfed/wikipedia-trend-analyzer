@@ -20,10 +20,20 @@ it like everything else. The one thing that doesn't come from the model:
 a row containing a holiday still gets forced to category="holiday" after the
 fact (see below), so the frontend can keep rendering holidays in their own
 section rather than mixed into the regular new/cluster feed.
+
+A row whose real cause is an NYT daily puzzle answer (Connections, Wordle,
+Spelling Bee, Strands) gets the same kind of forced override, to
+topic="puzzle" -- detected from the article's own trending_reason text via
+llm/nyt_games.py, not a dedicated flag, since the explanation prompts
+already require naming the specific puzzle whenever that's the real cause.
+Unlike holiday, this doesn't force a separate category/section -- it's
+purely a topic (icon) override, since NYT-puzzle trends don't need their
+own digest section the way holidays do.
 """
 from pipeline.daily_stats import TrendStats, CATEGORY_BOT_TRAFFIC
 from llm.client import LLMClient
 from llm.topics import DEFAULT_TOPIC
+from llm.nyt_games import mentions_nyt_games
 from llm.prompts import (
     DAILY_SUMMARY_MODEL,
     DAILY_SUMMARY_TEMPERATURE,
@@ -70,6 +80,7 @@ class DailySummaryGenerator:
         countries_by_title: dict[str, str] = {}
         mystery_by_title: dict[str, bool] = {}
         source_by_title: dict[str, str] = {}
+        nyt_games_by_title: dict[str, bool] = {}
 
         for article in articles:
             title = article["normalized_title"]
@@ -99,6 +110,16 @@ class DailySummaryGenerator:
             countries_by_title[title] = article.get("country")
             mystery_by_title[title] = bool(article.get("is_mystery"))
             source_by_title[title] = article.get("trending_reason_source")
+            # Detected from the article's own already-generated reason text,
+            # not a dedicated flag/DB column -- NYT_GAMES_LENGTH_RULE/
+            # _ACCURACY_NOTE (llm/prompts.py) require the explanation name
+            # the specific puzzle whenever that's really the cause, so the
+            # final text is a reliable signal on its own, and this needs to
+            # catch it regardless of which tiered-search stage actually
+            # resolved the article (a plain "search"-stage result can
+            # surface Connections coverage same as the dedicated
+            # "nyt_games" stage -- see llm/nyt_games.py).
+            nyt_games_by_title[title] = mentions_nyt_games(reason)
 
         if not eligible_titles:
             return []
@@ -153,12 +174,18 @@ class DailySummaryGenerator:
             # the subject the model picks as the row's "face" might not be
             # the holiday itself (e.g. "United States" over "Labor Day"), so
             # topics_by_title.get(subject_title) alone can't be trusted to
-            # carry it.
+            # carry it. "puzzle" is the same idea again, for a row whose
+            # real cause is an NYT daily puzzle answer -- equally invisible
+            # to the per-article classifier (it only sees title+extract,
+            # never why something is trending).
             has_holiday = any(source_by_title.get(t) == SOURCE_HOLIDAY for t in titles)
+            has_nyt_games = any(nyt_games_by_title.get(t) for t in titles)
             if has_holiday:
                 topic = "holiday"
             elif row.get("is_death"):
                 topic = "death"
+            elif has_nyt_games:
+                topic = "puzzle"
             else:
                 topic = topics_by_title.get(subject_title, DEFAULT_TOPIC)
 
@@ -188,13 +215,20 @@ class DailySummaryGenerator:
         # classification since that's independent of the digest LLM call.
         for title in sorted(eligible_titles - claimed):
             is_holiday = source_by_title.get(title) == SOURCE_HOLIDAY
+            is_nyt_games = nyt_games_by_title.get(title, False)
+            if is_holiday:
+                fallback_topic = "holiday"
+            elif is_nyt_games:
+                fallback_topic = "puzzle"
+            else:
+                fallback_topic = topics_by_title.get(title, DEFAULT_TOPIC)
             rows.append({
                 "category": CATEGORY_HOLIDAY if is_holiday else CATEGORY_NEW,
                 "titles": [title],
                 "headline": title,
                 "summary": reasons_by_title[title],
                 "image_url": None,
-                "topic": "holiday" if is_holiday else topics_by_title.get(title, DEFAULT_TOPIC),
+                "topic": fallback_topic,
                 "country": countries_by_title.get(title),
                 "is_mystery": mystery_by_title.get(title, False),
                 "streak_days": None,

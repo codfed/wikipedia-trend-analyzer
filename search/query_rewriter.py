@@ -1,6 +1,6 @@
 """LLM-based query rewriter for Stage 3 deep search."""
-from pipeline.models import Article
 from llm.client import LLMClient
+from pipeline.models import Article
 
 
 REWRITE_MODEL = "claude-haiku-4-5-20251001"

@@ -59,7 +59,19 @@ result is found.  Stops early:
   short, cheap, specific query, so it runs before the more expensive
   rewritten deep search rather than after it.
 - **Stage 5**: Deep — LLM rewrites query (`search/query_rewriter.py`), considering
-  non-news drivers (video, podcast, forum) + Serper (past month)
+  non-news drivers (video, podcast, forum) + Serper (past month). The rewriter is
+  given the article's own `summary` as context (not just the title), and is
+  prompted to consider a quote/incident/person *connected to* the subject (not
+  the subject itself) resurfacing near its own anniversary -- added after a
+  real miss (`2014 European Parliament election` spiking from a viral repost
+  of a 2014 Farage/Gill speech, unrelated to the election itself). This has a
+  real ceiling, though: the model is guessing blind, with no live web
+  awareness, so it can't reliably invent an unrelated current-events proper
+  noun (a person's name, a party, a scandal) that has no textual hook
+  anywhere in the article's own summary -- confirmed by testing the improved
+  prompt against that exact case and watching it still fail to guess
+  "Farage." Helps cases where the connection is derivable from the article's
+  own content; doesn't fix cases where it fundamentally isn't.
 - **unknown**: all stages failed → `is_mystery=True`
 
 Relevance is decided by a structured LLM call (`llm/relevance.py`) that returns

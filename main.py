@@ -12,6 +12,10 @@ Usage:
 
     # Force re-enrichment for every article, ignoring carried-forward reasons
     TARGET_DATE=2026-04-12 FORCE_REENRICH=1 python main.py
+
+    # Also run evals + grow the example bank (off by default, costs extra
+    # Haiku judge calls per article)
+    RUN_EVALS=1 python main.py
 """
 
 import os
@@ -299,18 +303,25 @@ def main() -> int:
                     print(f"  [anniversary] re-saved {article.title} to Supabase")
 
     # --- Run evals on just-processed articles ---
+    # Off by default -- opt in with RUN_EVALS=1. Evals are 2 extra Haiku
+    # judge calls per enriched article (trending_reason + trending_reason_short),
+    # every run, forever; skipping them also means the example bank stops
+    # growing (store_examples needs run_evals' scores, see evals/runner.py),
+    # so the self-improving loop pauses too, not just eval scoring itself.
     enriched = [a for a in processed if a.trending_reason]
-    if enriched and not os.getenv("SKIP_EVALS"):
+    if enriched and os.getenv("RUN_EVALS"):
         print(f"\n{'=' * 72}")
         print(f"Running evals on {len(enriched)} enriched article(s)…")
         print(f"{'=' * 72}")
-        run_evals(
+        eval_run = run_evals(
             enriched, llm_client, db_saver=article_saver, prompt_version=PROMPT_VERSION
         )
 
-        # Store high-scoring outputs in example bank
+        # Store high-scoring outputs in example bank -- reuses the scores
+        # eval_run already computed rather than re-judging (see
+        # evals/runner.py's store_examples docstring).
         if supabase_client:
-            store_examples(enriched, llm_client, example_bank)
+            store_examples(enriched, eval_run.reason_results, example_bank)
 
     # --- Log run ---
     if supabase_client and processed:

@@ -162,8 +162,8 @@ def main() -> int:
     # main.py originally produced them.
     if not os.getenv("SKIP_EVALS"):
         print(f"\n{'=' * 72}\nRunning evals on {len(resolved)} resolved article(s)…\n{'=' * 72}")
-        run_evals(resolved, llm_client, db_saver=saver, prompt_version=PROMPT_VERSION)
-        store_examples(resolved, llm_client, example_bank)
+        eval_run = run_evals(resolved, llm_client, db_saver=saver, prompt_version=PROMPT_VERSION)
+        store_examples(resolved, eval_run.reason_results, example_bank)
 
     return 0
 

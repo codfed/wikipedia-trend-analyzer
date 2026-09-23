@@ -279,7 +279,15 @@ Task:
 a single cluster entry instead of separate ones. A cluster gets ONE blurb that synthesizes \
 why the story matters as a whole (not each article's blurb stacked together). Don't force a \
 connection that isn't directly supported by the reasons given -- a shared vague theme is not \
-enough, it must be the same underlying story or event.
+enough, it must be the same underlying story or event. In particular: two deaths, tragedies, \
+or accusations are NOT the same story just because they're both sad, both involve someone \
+young, both say "renewed attention," or otherwise share an emotional register or topic label \
+-- they must be the same specific event, or directly involve the same specific person(s), not \
+just a similar shape of story. Two different people who died in two different, unrelated \
+circumstances are always separate entries, full stop, even when their reasons happen to use \
+similar language. If you cluster wrongly here, the merged entry's blurb ends up describing \
+only one of the two people, and the other vanishes from the digest entirely -- that failure \
+mode is exactly why this rule exists.
 3. Every article listed above must end up in exactly one entry, EXCEPT the India-local \
 exclusions described in step 7 below.
 4. Each entry also gets a headline -- a punchy, news-ticker-style headline, roughly 4-9 \

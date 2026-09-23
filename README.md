@@ -63,7 +63,7 @@ TARGET_DATE=2026-04-12 TARGET_TITLE=Shmuel_Mikunis python main.py
 | `WIKIPEDIA_EMAIL` | No | Added to Wikipedia API User-Agent header (good practice) |
 | `TARGET_DATE` | No | Override run date (`YYYY-MM-DD`) |
 | `TARGET_TITLE` | No | Run for a single article only (useful for debugging) |
-| `SKIP_EVALS` | No | Set to `1` to skip the post-run eval pass |
+| `RUN_EVALS` | No | Set to `1` to run the post-run eval pass (off by default — costs 2 extra Haiku judge calls per enriched article, and gates example-bank growth) |
 
 Copy `.env.example` to `.env` and fill in the values you need.
 

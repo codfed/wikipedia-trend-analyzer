@@ -10,6 +10,7 @@ Exit code 0 if all evaluated fields pass, non-zero otherwise.
 import argparse
 import os
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,15 +28,28 @@ from evals.fixtures import fetch_flagged_articles
 _SKIPPED = object()
 
 
+@dataclass
+class EvalRunResult:
+    exit_code: int
+    # title -> the trending_reason EvalResult already computed for that
+    # article, keyed so store_examples can reuse it instead of re-judging
+    # the same (article, raw_search_results) pair with a second LLM call.
+    # Only includes articles that were actually judged (not _SKIPPED).
+    reason_results: dict[str, EvalResult]
+
+
 def run_evals(
     articles: list[Article],
     llm_client: LLMClient,
     db_saver=None,
     prompt_version: str = PROMPT_VERSION,
-) -> int:
-    """Score articles and return exit code (0 = all pass)."""
+) -> EvalRunResult:
+    """Score articles; return exit code (0 = all pass) plus each article's
+    already-computed trending_reason EvalResult, so callers like
+    store_examples don't need a second judge call to get the same score."""
     judge = LLMJudge(llm_client)
     rows = []
+    reason_results: dict[str, EvalResult] = {}
 
     for article in articles:
         label = f"{article.title} ({article.date})"
@@ -64,6 +78,9 @@ def run_evals(
             else _SKIPPED
         )
         print("done")
+
+        if reason_result is not _SKIPPED:
+            reason_results[article.title] = reason_result
 
         rows.append({"label": label, "field": "trending_reason", "result": reason_result, "type": "llm"})
         rows.append({"label": label, "field": "trending_reason_short", "result": short_result, "type": "llm"})
@@ -112,12 +129,23 @@ def run_evals(
     print(f"{'=' * total_width}")
     print(f"\nLLM judge pass rate: {passed_count}/{judged_count}")
 
-    return 0 if passed_count == judged_count else 1
+    exit_code = 0 if passed_count == judged_count else 1
+    return EvalRunResult(exit_code=exit_code, reason_results=reason_results)
 
 
-def store_examples(articles: list[Article], llm_client: LLMClient, bank) -> None:
-    """Score enriched articles and store high-scorers in the example bank
+def store_examples(
+    articles: list[Article],
+    reason_results: dict[str, EvalResult],
+    bank,
+) -> None:
+    """Store high-scoring articles in the example bank
     (`memory.example_bank.ExampleBank`) for future few-shot injection.
+
+    Takes `reason_results` from `run_evals` (same run, same articles)
+    instead of an `llm_client` -- it used to re-score each article with its
+    own LLMJudge call, which was a literal duplicate of the judging
+    run_evals had just done moments earlier on the exact same
+    (article, raw_search_results) pair. No LLM call happens here now.
 
     Shared between main.py (called right after run_evals on a live run's
     freshly-enriched articles) and scripts/run_mystery_resolution.py (called
@@ -125,26 +153,24 @@ def store_examples(articles: list[Article], llm_client: LLMClient, bank) -> None
     that produces a real trending_reason from real search evidence should
     feed the self-improving loop the same way, not just the live pipeline.
     """
-    judge = LLMJudge(llm_client)
     for article in articles:
         if article.is_mystery or not article.raw_search_results:
             continue
-        try:
-            result = judge.score_trending_reason(article, article.raw_search_results)
-            if result.score >= 4:
-                bank.add_example(
-                    title=article.title,
-                    source=article.trending_reason_source,
-                    raw_input=article.raw_search_results[:3000],
-                    trending_reason=article.trending_reason,
-                    score=result.score,
-                )
-                print(
-                    f"  [example_bank] stored example for {article.title} "
-                    f"(score={result.score})"
-                )
-        except Exception as e:
-            print(f"  [example_bank] scoring failed for {article.title}: {e}")
+        result = reason_results.get(article.title)
+        if result is None:
+            continue
+        if result.score >= 4:
+            bank.add_example(
+                title=article.title,
+                source=article.trending_reason_source,
+                raw_input=article.raw_search_results[:3000],
+                trending_reason=article.trending_reason,
+                score=result.score,
+            )
+            print(
+                f"  [example_bank] stored example for {article.title} "
+                f"(score={result.score})"
+            )
 
 
 def _save_eval_rows(db_saver, article, results, prompt_version):
@@ -203,4 +229,4 @@ if __name__ == "__main__":
         print("No articles found.")
         sys.exit(0)
 
-    sys.exit(run_evals(articles, llm_client))
+    sys.exit(run_evals(articles, llm_client).exit_code)

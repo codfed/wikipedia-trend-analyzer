@@ -16,6 +16,10 @@ TARGET_DATE=2026-04-12 python main.py
 # Single article (debug)
 TARGET_DATE=2026-04-12 TARGET_TITLE=Shmuel_Mikunis python main.py
 
+# Also run evals + grow the example bank (off by default in main.py --
+# costs 2 extra Haiku judge calls per enriched article)
+RUN_EVALS=1 python main.py
+
 # Evals on a past run
 python evals/runner.py --date 2026-04-12
 
@@ -329,11 +333,19 @@ holiday/puzzle topic override and otherwise pull `topic`/`country`/
 independent of the digest LLM call succeeding.
 
 ### 6. Eval-First Design
-Evals run automatically after every pipeline run.  Two fields are evaluated:
+Evals are opt-in per run (`RUN_EVALS=1`) rather than automatic -- each
+enriched article costs 2 extra Haiku judge calls (`trending_reason` +
+`trending_reason_short`), every run, so it's off by default to keep
+steady-state token spend down. Two fields are evaluated when enabled:
 - `trending_reason` — faithfulness + format (LLM judge + deterministic checks)
 - `trending_reason_short` — word count gate + faithfulness (LLM judge)
 
 Results are printed to stdout and optionally persisted to `eval_results`.
+The example bank (`memory/example_bank.py`) only grows on runs where evals
+ran, since `store_examples` (see `evals/runner.py`) reuses the score
+`run_evals` already computed for each article rather than re-judging --
+skipping evals also pauses the self-improving loop's growth for that run,
+not just eval scoring itself.
 
 ## Key Files
 

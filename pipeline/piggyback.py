@@ -20,7 +20,7 @@ import json
 
 from pipeline.models import Article
 from search.client import SerperClient
-from search.tiered import SearchResult, date_window, format_organic
+from search.tiered import SearchResult, TieredSearcher, date_window, format_organic
 from llm.client import LLMClient
 from llm.generator import ExplanationGenerator
 from llm.prompts import (
@@ -152,6 +152,7 @@ def _try_search_fallback(
         return
 
     relevant, confidence = relevance_fn(article, formatted)
+    relevant = relevant and confidence >= TieredSearcher.RELEVANCE_THRESHOLD
     print(f"  [piggyback] fallback search: relevant={relevant}, confidence={confidence:.2f}")
     if not relevant:
         return

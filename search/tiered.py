@@ -219,6 +219,7 @@ class TieredSearcher:
             return False, 0.0
         try:
             relevant, confidence = self._is_relevant(article, formatted)
+            relevant = relevant and confidence >= self.RELEVANCE_THRESHOLD
             print(
                 f"  [tiered] {stage}: relevant={relevant}, confidence={confidence:.2f}"
             )

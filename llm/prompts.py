@@ -2,7 +2,7 @@
 
 # Increment this whenever a prompt changes.  Saved articles and eval results
 # include this version so quality changes can be tracked over time.
-PROMPT_VERSION = "v2.6"
+PROMPT_VERSION = "v2.7"
 
 # ---------------------------------------------------------------------------
 # Summary + content classification (always runs, Haiku, structured JSON)
@@ -36,8 +36,13 @@ music_classical, music_hiphop, music_country, music_other.
 - People by role (use when the subject IS a person and none of the media/sport labels apply \
 to their claim to fame): actor, comedian, tv_anchor, musician, author, politician, \
 business_executive, religious_figure, royal.
-- Crime & justice: crime_violent, crime_white_collar, legal_verdict (a trial outcome, \
-sentencing, or court ruling of any kind).
+- Crime & justice: crime_sexual_assault (rape, sexual assault, or sexual abuse -- use this \
+instead of crime_violent whenever sexual assault is centrally involved), crime_child_abuse \
+(child abuse or child exploitation -- use this instead of crime_violent or \
+crime_sexual_assault whenever the victim(s) are children), crime_mass_casualty (a mass \
+shooting, bombing, or other attack/disaster with multiple victims), crime_violent (any other \
+violent crime -- assault, murder, robbery -- that isn't one of the three categories above), \
+crime_white_collar, legal_verdict (a trial outcome, sentencing, or court ruling of any kind).
 - World & science: politics_world (geopolitics, elections, government, international \
 relations), science_tech, space, health_medicine.
 - Other: death (use ONLY if the article itself is a "Deaths in YYYY"-style rolling list, not \

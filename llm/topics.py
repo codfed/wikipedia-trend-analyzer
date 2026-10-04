@@ -27,6 +27,10 @@ VALID_TOPICS = {
     "business_executive", "religious_figure", "royal",
     # Crime & justice
     "crime_violent", "crime_white_collar", "legal_verdict",
+    # Crime & justice -- sensitive subtypes, split out of crime_violent so the
+    # frontend can render a gentler icon than a generic violent-crime one
+    # (motivating case: a gang rape case rendering with a knife emoji).
+    "crime_sexual_assault", "crime_child_abuse", "crime_mass_casualty",
     # World & science
     "politics_world", "science_tech", "space", "health_medicine",
     # Other

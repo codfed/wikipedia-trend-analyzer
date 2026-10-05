@@ -32,7 +32,7 @@ class ArticleSaver:
         try:
             result = (
                 self._db.table(ARTICLE_TABLE)
-                .select("trending_date,trending_reason,trending_reason_short,trending_reason_source")
+                .select("trending_date,trending_reason,trending_reason_short,trending_reason_source,raw_search_results,search_query_used")
                 .eq("title", title)
                 .lt("trending_date", current_date)
                 .not_.is_("trending_reason", "null")

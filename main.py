@@ -236,6 +236,8 @@ def main() -> int:
                 article.trending_reason_short = prior["trending_reason_short"]
                 article.trending_reason_source = "carried_forward"
                 article.carried_from_date = prior["trending_date"]
+                article.raw_search_results = prior.get("raw_search_results") or ""
+                article.search_query_used = prior.get("search_query_used") or ""
                 print(f"  [carried_forward] reused reason from {prior['trending_date']}")
             elif enricher:
                 if prior:
